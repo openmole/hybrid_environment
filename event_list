@@ -1,0 +1,41 @@
+/data/openmole/openmole/core/org.openmole.core.workflow/src/main/scala/org/openmole/core/workflow/execution/Environment.scala
+case class JobSubmitted(job: ExecutionJob) extends Event[Environment]
+case class JobStateChanged(job: ExecutionJob, newState: ExecutionState, oldState: ExecutionState) extends Event[Environment]
+case class ExceptionRaised(job: ExecutionJob, exception: Throwable, level: Level) extends Event[Environment] with ExceptionEvent
+case class MoleJobExceptionRaised(job: ExecutionJob, exception: Throwable, level: Level, moleJob: MoleJob) extends Event[Environment]
+case class JobCompleted(job: ExecutionJob, log: RuntimeLog, info: RuntimeInfo) extends Event[Environment]
+
+
+/data/openmole/openmole/core/org.openmole.core.batch/src/main/scala/org/openmole/core/batch/environment/BatchEnvironment.scala
+case class BeginUpload(id: Long, path: String, storage: StorageService) extends Event[BatchEnvironment] with Transfer
+case class EndUpload(id: Long, path: String, storage: StorageService) extends Event[BatchEnvironment] with Transfer
+
+case class BeginDownload(id: Long, path: String, storage: StorageService) extends Event[BatchEnvironment] with Transfer
+case class EndDownload(id: Long, path: String, storage: StorageService) extends Event[BatchEnvironment] with Transfer
+
+
+/data/openmole/openmole/core/org.openmole.core.batch/src/main/scala/org/openmole/core/batch/jobservice/BatchJob.scala
+case class StateChanged(newState: ExecutionState.ExecutionState, oldState: ExecutionState.ExecutionState) extends Event[BatchJob]
+
+
+/data/openmole/openmole/core/org.openmole.core.workflow/src/main/scala/org/openmole/core/workflow/mole/MoleExecution.scala
+class Starting extends Event[MoleExecution]
+case class Finished(canceled: Boolean) extends Event[MoleExecution]
+case class JobStatusChanged(moleJob: MoleJob, capsule: Capsule, newState: State, oldState: State) extends Event[MoleExecution]
+case class JobCreated(moleJob: MoleJob, capsule: Capsule) extends Event[MoleExecution]
+case class JobSubmitted(moleJob: Job, capsule: Capsule, environment: Environment) extends Event[MoleExecution]
+case class JobFinished(moleJob: MoleJob, capsule: Capsule) extends Event[MoleExecution]
+case class JobFailed(moleJob: MoleJob, capsule: Capsule, exception: Throwable) extends Event[MoleExecution] with ExceptionEvent {
+	def level = Level.SEVERE
+	}
+case class ExceptionRaised(moleJob: MoleJob, exception: Throwable, level: Level) extends Event[MoleExecution] with ExceptionEvent
+case class SourceExceptionRaised(source: Source, capsule: Capsule, exception: Throwable, level: Level) extends Event[MoleExecution] with ExceptionEvent
+case class HookExceptionRaised(hook: Hook, moleJob: MoleJob, exception: Throwable, level: Level) extends Event[MoleExecution] with ExceptionEvent
+
+
+/data/openmole/openmole/core/org.openmole.core.workflow/src/main/scala/org/openmole/core/workflow/mole/SubMoleExecution.scala
+case class Finished(val ticket: Ticket, canceled: Boolean) extends Event[SubMoleExecution]
+
+
+/data/openmole/openmole/core/org.openmole.core.workspace/src/main/scala/org/openmole/core/workspace/Workspace.scala
+case object PasswordRequired extends Event[Workspace]
