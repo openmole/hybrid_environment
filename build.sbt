@@ -23,4 +23,10 @@ libraryDependencies += "org.openmole" %% "org-openmole-core-dsl" % openMOLEVersi
 
 libraryDependencies += "org.openmole" %% "org-openmole-core-batch" % openMOLEVersion
 
+libraryDependencies += "org.openmole" %% "org-openmole-tool-logger" % openMOLEVersion
+
 libraryDependencies += "org.openmole" %% "org-openmole-plugin-task-scala" % openMOLEVersion
+
+libraryDependencies += "org.openmole" %% "org-openmole-plugin-environment-ssh" % openMOLEVersion
+
+libraryDependencies += ("org.scala-stm" %% "scala-stm" % "0.7")
