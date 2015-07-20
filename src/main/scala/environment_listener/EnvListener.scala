@@ -14,21 +14,22 @@ import org.openmole.core.event._
 import scala.collection.mutable
 
 object EnvListener {
-    val f_hour = new SimpleDateFormat("HH")
-    val f_min = new SimpleDateFormat("mm")
-    val f_sec = new SimpleDateFormat("ss")
-    val f_day_m = new SimpleDateFormat("dd")
-    val f_day_w = new SimpleDateFormat("F")
-    val f_timezone = new SimpleDateFormat("Z")
-    val f_month = new SimpleDateFormat("M")
+    val date_list = mutable.MutableList[(SimpleDateFormat, String)]()
 
+    date_list += ((new SimpleDateFormat("HH"), "hour"))
+    date_list += ((new SimpleDateFormat("mm"), "min"))
+    date_list += ((new SimpleDateFormat("ss"), "sec"))
+    date_list += ((new SimpleDateFormat("dd"), "day_m"))
+    date_list += ((new SimpleDateFormat("F"), "day_w"))
+    date_list += ((new SimpleDateFormat("Z"), "timezone"))
+    date_list += ((new SimpleDateFormat("M"), "month"))
 }
 
 class EnvListener(env : Environment) extends Runnable {
-    val jobExpectedState = new mutable.HashMap[String, ExecutionState]
-    val jobTimings = new mutable.HashMap[String, mutable.HashMap[String, Long]]
+    val jobExpectedState = mutable.HashMap[String, ExecutionState]()
+    val jobTimings = mutable.HashMap[String, mutable.HashMap[String, Long]]()
 
-    val shortId = new mutable.HashMap[ExecutionJob, String]
+    val shortId = mutable.HashMap[ExecutionJob, String]()
     val L = Listener.Log.logger
 
     /**
@@ -71,6 +72,7 @@ class EnvListener(env : Environment) extends Runnable {
     def run(): Unit = {
         L.info(s"Now monitoring $env.")
 
+        // FIXME: Too spaghetti
         env listen {
             case (_, JobStateChanged(job, SUBMITTED, READY)) => create(job)
             case (_, JobStateChanged(_, RUNNING, RUNNING)) => // ugly way to mask those transition
@@ -82,14 +84,16 @@ class EnvListener(env : Environment) extends Runnable {
     }
 
     /**
-     * Create all the data useful to measure the job, and put the first measuress in the Listener data_store
+     * Create all the data useful to measure the job, and put the first measures in the Listener data_store
      * @param job The job
      */
     def create(job: ExecutionJob) = {
+        // FIXME: Actually does too much different things
         L.info(s"Catched $job.")
 
         shortId(job) = genShortId(job)
         val id = shortId(job)
+
 
         val cal = Calendar.getInstance
         jobTimings(id) = new mutable.HashMap[String, Long]
@@ -97,7 +101,6 @@ class EnvListener(env : Environment) extends Runnable {
 
         jobExpectedState(id) = DONE
 
-        val t = cal.getTime
 
         Listener.create_job_map(env, id)
 
@@ -105,14 +108,10 @@ class EnvListener(env : Environment) extends Runnable {
         Listener.put(env, id, "env_kind", env_kind)
         Listener.put(env, id, "core", core)
 
-        // TODO: Refactor
-        Listener.put(env, id, "hour", EnvListener.f_hour.format(t))
-        Listener.put(env, id, "min", EnvListener.f_min.format(t))
-        Listener.put(env, id, "sec", EnvListener.f_sec.format(t))
-        Listener.put(env, id, "day_m", EnvListener.f_day_m.format(t))
-        Listener.put(env, id, "day_w", EnvListener.f_day_w.format(t))
-        Listener.put(env, id, "timezone", EnvListener.f_timezone.format(t))
-        Listener.put(env, id, "month", EnvListener.f_month.format(t))
+        val t = cal.getTime
+        for((dateFormat, name) <- EnvListener.date_list){
+            Listener.put(env, id, name, dateFormat.format(t))
+        }
     }
 
     /**
