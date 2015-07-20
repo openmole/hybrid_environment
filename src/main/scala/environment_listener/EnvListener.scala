@@ -2,16 +2,18 @@ package environment_listener
 
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import scala.collection.mutable
 
 import org.openmole.core.workflow.execution.{ExecutionJob, Environment}
 import org.openmole.core.workflow.execution.ExecutionState.{ExecutionState, SUBMITTED, READY, DONE, KILLED, FAILED, RUNNING}
 import org.openmole.core.workflow.execution.Environment.JobStateChanged
 
+import org.openmole.plugin.environment.slurm.SLURMEnvironment
 import org.openmole.plugin.environment.ssh.SSHEnvironment
+import org.openmole.plugin.environment.condor.CondorEnvironment
 
 import org.openmole.core.event._
 
-import scala.collection.mutable
 
 object EnvListener {
     val date_list = mutable.MutableList[(SimpleDateFormat, String)]()
@@ -35,9 +37,13 @@ class EnvListener(env : Environment) extends Runnable {
     /**
      * The name of the environment.
      * SSH => user@host
+     * Condor => user@host
+     * SLURM => user@host
      */
     val env_name : String = env match {
         case e:SSHEnvironment =>  e.user ++ "@" ++ e.host
+        case e:CondorEnvironment => e.user ++ "@" ++ e.host
+        case e:SLURMEnvironment => e.user ++ "@" ++ e.host
         case _ =>
             L.severe(s"Unsupported environment (envName): $env.")
             ""
@@ -46,9 +52,13 @@ class EnvListener(env : Environment) extends Runnable {
     /**
      * The kind of the environment.
      * SSH
+     * Condor
+     * SLURM
      */
     val env_kind : String = env match {
         case _:SSHEnvironment => "SSHEnvironment"
+        case _:CondorEnvironment => "CondorEnvironment"
+        case _:SLURMEnvironment => "SLURMEnvironment"
         case _ =>
             L.severe(s"Unsupported environment (envKind): $env.")
             ""
@@ -56,10 +66,14 @@ class EnvListener(env : Environment) extends Runnable {
 
     /**
      * The number of core of the environment.
-     * SSH.
+     * SSH
+     * Condor
+     * SLURM
      */
     val core : Int = env match {
         case e:SSHEnvironment => e.nbSlots
+        case e:CondorEnvironment => e.threads.getOrElse(1)
+        case e:SLURMEnvironment => e.threads.getOrElse(1)
         case _ =>
             L.severe(s"Unsupported environment (core): $env.")
             -1

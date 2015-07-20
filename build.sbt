@@ -2,7 +2,7 @@ name := "environment_listener"
 
 version := "1.0"
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.7"
 
 osgiSettings
 
@@ -28,5 +28,9 @@ libraryDependencies += "org.openmole" %% "org-openmole-tool-logger" % openMOLEVe
 libraryDependencies += "org.openmole" %% "org-openmole-plugin-task-scala" % openMOLEVersion
 
 libraryDependencies += "org.openmole" %% "org-openmole-plugin-environment-ssh" % openMOLEVersion
+
+libraryDependencies += "org.openmole" %% "org-openmole-plugin-environment-condor" % openMOLEVersion
+
+libraryDependencies += "org.openmole" %% "org-openmole-plugin-environment-slurm" % openMOLEVersion
 
 libraryDependencies += ("org.scala-stm" %% "scala-stm" % "0.7")
