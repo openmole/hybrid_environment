@@ -1,3 +1,5 @@
+// TODO License
+
 package environment_listener
 
 import scala.collection.mutable
@@ -57,19 +59,43 @@ object Listener extends Logger{
     }
 
 
-    // FIXME Find a way in the openmole script to call this function at the end
     /**
-     * Will print all the data contained in the data_store
+      * Will print all the data contained in the data_store
      * Should be replaced by a function writing everything in a file
      */
-	def print_data() = atomic { implicit ctx =>
+    def print_data() = atomic { implicit ctx =>
+        // FIXME Find a way in the openmole script to call this function at the end
         Log.logger.info("Printing data...")
 
-        for(job : String <- data_store.keys) {
-            println(s"Job: $job")
-            for (metric: String <- data_store(job).keys) {
-                println(s"\t$metric : ${data_store(job)(ctx)(metric)}")
+        for(job_id : String <- data_store.keys) {
+            println(s"Job: $job_id")
+            for (metric: String <- data_store(job_id).keys) {
+                println(s"\t$metric : ${data_store(job_id)(ctx)(metric)}")
             }
         }
 	}
+
+
+    /**
+     * Print all the informations stored about the job_id.
+     * @param job_id The job to display
+     */
+    def print_job(job_id : String) = atomic { implicit ctx =>
+        println(s"Job: $job_id")
+        for (metric: String <- data_store(job_id).keys) {
+            println(s"\t$metric : ${data_store(job_id)(ctx)(metric)}")
+        }
+    }
+
+
+    /**
+     * Dump the data store in the given csv file.
+     * File will be created if does not exist, otherwise will append to it.
+     * @param path The path to the csv file
+     * @return
+     */
+    def dump_to_csv(path : String) = {
+        // TODO implement
+        throw new NotImplementedError()
+    }
 }

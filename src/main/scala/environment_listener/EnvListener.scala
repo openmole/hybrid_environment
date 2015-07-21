@@ -83,6 +83,8 @@ class EnvListener(env : Environment) extends Runnable {
             -1
     }
 
+    // TODO memory
+
     /**
      * Start to monitor the environment
      */
@@ -96,14 +98,17 @@ class EnvListener(env : Environment) extends Runnable {
                 fillInputs(job)
                 processNewState(job, SUBMITTED, READY)
             case (_, JobStateChanged(_, RUNNING, RUNNING)) => // ugly way to mask those transition
+            case (_, JobStateChanged(_, SUBMITTED, SUBMITTED)) => // ugly way to mask those transition
             case (_, JobStateChanged(job, KILLED, oldState)) =>
                 putTimings(job)
                 Listener.put(shortId(job), "failed", false)
-                Listener.print_data()
+                Listener.print_job(shortId(job))
+                // TODO CLEAN
             case (_, JobStateChanged(job, FAILED, _)) =>
-                putTimings(job)
+                putTimings(job) // FIXME
                 Listener.put(shortId(job), "failed", true)
-                Listener.print_data()
+                Listener.print_job(shortId(job))
+                // TODO CLEAN
             case (_, JobStateChanged(job, newState, oldState)) => processNewState(job, newState, oldState)
         }
     }
@@ -112,7 +117,7 @@ class EnvListener(env : Environment) extends Runnable {
      * Create the data structures needed to monitor a job
      * @param job The job
      */
-    def create(job: ExecutionJob) = {
+    def create(job : ExecutionJob) = {
         L.info(s"Catched $job.")
 
         shortId(job) = genShortId(job)
@@ -121,6 +126,11 @@ class EnvListener(env : Environment) extends Runnable {
         Listener.create_job_map(id)
         jobTimings(id) = new mutable.HashMap[String, Long]
         jobExpectedState(id) = DONE
+    }
+
+    def delete(job : ExecutionJob) = {
+        // TODO
+        throw new NotImplementedError()
     }
 
     /**
@@ -157,12 +167,9 @@ class EnvListener(env : Environment) extends Runnable {
      * Will create an entry in the jobTimings table for the new state.
      * @param job The job
      * @param newState The new state
-     * @param oldState Mostly irrelevant, only used for the sanityState check.
      */
-    def processNewState(job : ExecutionJob, newState : ExecutionState, oldState : ExecutionState) = {
-        println(s"$job\n\t$oldState -> $newState")
-
-        sanityState(job, newState, oldState)
+    def processNewState(job: ExecutionJob, newState: ExecutionState, oldState : ExecutionState) = {
+        L.info(s"$job\n\t$oldState -> $newState")
 
         jobTimings(shortId(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis
     }
@@ -176,26 +183,19 @@ class EnvListener(env : Environment) extends Runnable {
      */
     def putTimings(job : ExecutionJob) = {
         val id : String = shortId(job)
-        val totalTime : Long = jobTimings(id)("Done") - jobTimings(id)("Submitted")
 
-        Listener.put(id, "totalTime", totalTime)
-    }
-
-    /**
-     * Check if the new state makes sense according to the current knowledge.
-     * @param job The job concerned
-     * @param newState The new state
-     * @param oldState The old state (currently irrelevant in the processing)
-     */
-    def sanityState(job : ExecutionJob, newState : ExecutionState, oldState : ExecutionState) = {
-        val id : String = shortId(job)
-
-        if(id == null){
-            L.severe(s"Job unknown: $job\n\tProbably not heard when readied.")
+        var waitingTime : Long = 0
+        var execTime : Long = 0
+        if(jobTimings(id) contains "Running"){
+            waitingTime = jobTimings(id)("Running") - jobTimings(id)("Submitted")
+            execTime = jobTimings(id)("Done") - jobTimings(id)("Running")
+        }else{
+            execTime = jobTimings(id)("Done") - jobTimings(id)("Submitted")
         }
-        val es = jobExpectedState(id)
-        if(es != newState){
-            L.severe(s"New state doesn't match expected state\n\tExpecting $es, found $newState.")
-        }
+
+        Listener.put(id, "waitingTime", waitingTime)
+        Listener.put(id, "execTime", execTime)
+
+        Listener.put(id, "totalTime", waitingTime + execTime)
     }
 }
