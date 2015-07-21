@@ -16,6 +16,9 @@ import org.openmole.core.event._
 
 
 object EnvListener {
+    /**
+     * Will contain the list of all the date measurements done at the submission of the job
+     */
     val date_list = mutable.MutableList[(SimpleDateFormat, String)]()
 
     date_list += ((new SimpleDateFormat("HH"), "hour"))
@@ -28,6 +31,7 @@ object EnvListener {
 }
 
 class EnvListener(env : Environment) extends Runnable {
+    // FIXME ExpectedState
     val jobExpectedState = mutable.HashMap[String, ExecutionState]()
     val jobTimings = mutable.HashMap[String, mutable.HashMap[String, Long]]()
 
@@ -79,7 +83,6 @@ class EnvListener(env : Environment) extends Runnable {
             -1
     }
 
-
     /**
      * Start to monitor the environment
      */
@@ -88,43 +91,54 @@ class EnvListener(env : Environment) extends Runnable {
 
         // FIXME: Too spaghetti
         env listen {
-            case (_, JobStateChanged(job, SUBMITTED, READY)) => create(job)
+            case (_, JobStateChanged(job, SUBMITTED, READY)) =>
+                create(job)
+                fillInputs(job)
+                processNewState(job, SUBMITTED, READY)
             case (_, JobStateChanged(_, RUNNING, RUNNING)) => // ugly way to mask those transition
-            case (_, JobStateChanged(job, KILLED, oldState)) => computeTimings(job, oldState)
-            case (_, JobStateChanged(job, FAILED, _)) => // Should do something
+            case (_, JobStateChanged(job, KILLED, oldState)) =>
+                putTimings(job)
+                Listener.put(shortId(job), "failed", false)
+                Listener.print_data()
+            case (_, JobStateChanged(job, FAILED, _)) =>
+                putTimings(job)
+                Listener.put(shortId(job), "failed", true)
+                Listener.print_data()
             case (_, JobStateChanged(job, newState, oldState)) => processNewState(job, newState, oldState)
-            // case e => println(e)
         }
     }
 
     /**
-     * Create all the data useful to measure the job, and put the first measures in the Listener data_store
+     * Create the data structures needed to monitor a job
      * @param job The job
      */
     def create(job: ExecutionJob) = {
-        // FIXME: Actually does too much different things
         L.info(s"Catched $job.")
 
         shortId(job) = genShortId(job)
         val id = shortId(job)
 
-
-        val cal = Calendar.getInstance
+        Listener.create_job_map(id)
         jobTimings(id) = new mutable.HashMap[String, Long]
-        jobTimings(id)(SUBMITTED.toString()) = cal.getTimeInMillis
-
         jobExpectedState(id) = DONE
+    }
 
+    /**
+     * Fill the first values in the Listener data store.
+     * The values are the name of the environment, the kind, number of core
+     * And all the values defined in EnvListener.date_list
+     * @param job The job
+     */
+    def fillInputs(job : ExecutionJob) = {
+        val id = shortId(job)
 
-        Listener.create_job_map(env, id)
+        Listener.put(id, "env_name", env_name)
+        Listener.put(id, "env_kind", env_kind)
+        Listener.put(id, "core", core)
 
-        Listener.put(env, id, "env_name", env_name)
-        Listener.put(env, id, "env_kind", env_kind)
-        Listener.put(env, id, "core", core)
-
-        val t = cal.getTime
+        val t = Calendar.getInstance.getTime
         for((dateFormat, name) <- EnvListener.date_list){
-            Listener.put(env, id, name, dateFormat.format(t))
+            Listener.put(id, name, dateFormat.format(t))
         }
     }
 
@@ -154,22 +168,17 @@ class EnvListener(env : Environment) extends Runnable {
     }
 
     /**
-     * Should be called once the current state is KILLED.
+     * Should be called once the current state is KILLED or FAILED.
      * It will compute all the defined timings using the saved times in jobTimings
      * At the moment, compute :
      *  totalTime = Done - submitted
      * @param job The job
-     * @param oldState The old state (given only to call sanityState)s
      */
-    def computeTimings(job : ExecutionJob, oldState : ExecutionState) = {
-        sanityState(job, KILLED, oldState)
-
-        val id = shortId(job)
+    def putTimings(job : ExecutionJob) = {
+        val id : String = shortId(job)
         val totalTime : Long = jobTimings(id)("Done") - jobTimings(id)("Submitted")
 
-        Listener.put(env, id, "totalTime", totalTime)
-
-        Listener.print_datas()
+        Listener.put(id, "totalTime", totalTime)
     }
 
     /**
@@ -179,7 +188,7 @@ class EnvListener(env : Environment) extends Runnable {
      * @param oldState The old state (currently irrelevant in the processing)
      */
     def sanityState(job : ExecutionJob, newState : ExecutionState, oldState : ExecutionState) = {
-        val id = shortId(job)
+        val id : String = shortId(job)
 
         if(id == null){
             L.severe(s"Job unknown: $job\n\tProbably not heard when readied.")
