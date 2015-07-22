@@ -2,6 +2,8 @@
 
 package environment_listener
 
+import java.io.{BufferedWriter, FileWriter, File}
+
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
@@ -11,6 +13,7 @@ import scala.concurrent.stm._
 object Listener extends Logger{
     private val env_list = mutable.MutableList[Environment]()
 	private val data_store = TMap[String, TMap[String, Any]]()
+    private val csv_path : String = "/tmp/openmole.csv"
 
 
     /**
@@ -27,6 +30,7 @@ object Listener extends Logger{
      * Launch a new thread of EnvListener for each environment registered
      */
     def start_monitoring() = atomic { implicit ctx =>
+
         for(env <- env_list){
             new EnvListener(env).run()
         }
@@ -59,6 +63,7 @@ object Listener extends Logger{
     }
 
 
+    // TODO Create class for IO
     /**
       * Will print all the data contained in the data_store
      * Should be replaced by a function writing everything in a file
@@ -68,10 +73,7 @@ object Listener extends Logger{
         Log.logger.info("Printing data...")
 
         for(job_id : String <- data_store.keys) {
-            println(s"Job: $job_id")
-            for (metric: String <- data_store(job_id).keys) {
-                println(s"\t$metric : ${data_store(job_id)(ctx)(metric)}")
-            }
+            print_job(job_id)
         }
 	}
 
@@ -85,6 +87,72 @@ object Listener extends Logger{
         for (metric: String <- data_store(job_id).keys) {
             println(s"\t$metric : ${data_store(job_id)(ctx)(metric)}")
         }
+    }
+
+
+    /**
+     * Write all the measurements of the job to the given csv file.
+     * @param job_id The job to be written.
+     */
+    def job_csv(job_id : String){
+        Log.logger.info(s"Writing job $job_id measurements to $csv_path.")
+        val file : File = new File(csv_path)
+
+        if(!file.exists()){
+            create_csv(file)
+        }
+
+        write_job_csv(job_id, file)
+    }
+
+
+    /**
+     * Actually write the job_id measures in the file.
+     * The file _must_ be created before.
+     * @param job_id The job to be written.
+     * @param file The destination file.
+     */
+    private def write_job_csv(job_id : String, file: File) = atomic { implicit ctx =>
+        val writer = new BufferedWriter(new FileWriter(file, true))
+
+        for(metric : String <- data_store(job_id).keys){
+            writer.write(data_store(job_id)(ctx)(metric).toString)
+            writer.write(", ")
+        }
+        writer.write("\n")
+
+        writer.close()
+    }
+
+
+    /**
+     * Create the csv file, and then call the write_header function
+     * @param file The file to be created
+     */
+    private def create_csv(file : File) {
+        Log.logger.info(s"Creating the file $file.")
+        file.getParentFile.mkdirs
+        file.createNewFile
+
+        write_header(file)
+    }
+
+
+    /**
+     * Put the header (name of the metrics) to the given file
+     * @param file The file where the header should be put
+     */
+    private def write_header(file : File) = atomic { implicit ctx =>
+        println("Writing header")
+        val writer = new BufferedWriter(new FileWriter(file, true))
+        for (metric: String <- data_store(data_store.keySet.head).keys) {
+            println(metric)
+            writer.write(metric)
+            writer.write(", ")
+        }
+        writer.write("\n")
+
+        writer.close()
     }
 
 

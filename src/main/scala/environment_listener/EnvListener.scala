@@ -31,8 +31,6 @@ object EnvListener {
 }
 
 class EnvListener(env : Environment) extends Runnable {
-    // FIXME ExpectedState
-    val jobExpectedState = mutable.HashMap[String, ExecutionState]()
     val jobTimings = mutable.HashMap[String, mutable.HashMap[String, Long]]()
 
     val shortId = mutable.HashMap[ExecutionJob, String]()
@@ -102,13 +100,14 @@ class EnvListener(env : Environment) extends Runnable {
             case (_, JobStateChanged(job, KILLED, oldState)) =>
                 putTimings(job)
                 Listener.put(shortId(job), "failed", false)
+                Listener.job_csv(shortId(job))
                 Listener.print_job(shortId(job))
-                // TODO CLEAN
+                delete(job)
             case (_, JobStateChanged(job, FAILED, _)) =>
-                putTimings(job) // FIXME
+                failedTimings(job)
                 Listener.put(shortId(job), "failed", true)
-                Listener.print_job(shortId(job))
-                // TODO CLEAN
+                Listener.job_csv(shortId(job))
+                delete(job)
             case (_, JobStateChanged(job, newState, oldState)) => processNewState(job, newState, oldState)
         }
     }
@@ -125,12 +124,17 @@ class EnvListener(env : Environment) extends Runnable {
 
         Listener.create_job_map(id)
         jobTimings(id) = new mutable.HashMap[String, Long]
-        jobExpectedState(id) = DONE
     }
 
+    /**
+     * Delete the (now unnecessary) data structures about the given job
+     * Remove entry in jobTimings, and in shortId
+     * @param job The job to be deleted
+     */
     def delete(job : ExecutionJob) = {
-        // TODO
-        throw new NotImplementedError()
+        jobTimings.remove(shortId(job))
+
+        shortId.remove(job)
     }
 
     /**
@@ -140,6 +144,8 @@ class EnvListener(env : Environment) extends Runnable {
      * @param job The job
      */
     def fillInputs(job : ExecutionJob) = {
+        // TODO Find more inputs about the job itself
+        // But like what ? Kind of task ? Content to upload ?
         val id = shortId(job)
 
         Listener.put(id, "env_name", env_name)
@@ -171,31 +177,55 @@ class EnvListener(env : Environment) extends Runnable {
     def processNewState(job: ExecutionJob, newState: ExecutionState, oldState : ExecutionState) = {
         L.info(s"$job\n\t$oldState -> $newState")
 
-        jobTimings(shortId(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis
+        jobTimings(shortId(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis / 1000
     }
 
     /**
-     * Should be called once the current state is KILLED or FAILED.
+     * Differenciate the timings between the two states, and put them in the data store.
+     * t(laterState) - t(earlyState)
+     * If at least one state is not found, will put 0 as value.
+     * @param job The job concerned by the timing.
+     * @param name The name of the timing.
+     * @param laterState The most recent state.
+     * @param earlyState The oldest state.
+     */
+    def putDiff(job : ExecutionJob, name : String,  laterState : String, earlyState : String) = {
+        val id : String = shortId(job)
+
+        var v : Long = 0
+        if(jobTimings(id).contains(laterState) && jobTimings(id).contains(earlyState)){
+            v = jobTimings(id)(laterState) - jobTimings(id)(earlyState)
+        }
+
+        Listener.put(id, name , v)
+    }
+
+    /**
+     * Should be called once the current state is KILLED.
      * It will compute all the defined timings using the saved times in jobTimings
      * At the moment, compute :
      *  totalTime = Done - submitted
+     *  execTime = Done - running
+     *  waitingTime = running - submitted
      * @param job The job
      */
     def putTimings(job : ExecutionJob) = {
-        val id : String = shortId(job)
+        putDiff(job, "totalTime", DONE.toString(), SUBMITTED.toString())
+        putDiff(job, "execTime", DONE.toString(), RUNNING.toString())
+        putDiff(job, "waitingTime", RUNNING.toString(), SUBMITTED.toString())
+    }
 
-        var waitingTime : Long = 0
-        var execTime : Long = 0
-        if(jobTimings(id) contains "Running"){
-            waitingTime = jobTimings(id)("Running") - jobTimings(id)("Submitted")
-            execTime = jobTimings(id)("Done") - jobTimings(id)("Running")
-        }else{
-            execTime = jobTimings(id)("Done") - jobTimings(id)("Submitted")
-        }
-
-        Listener.put(id, "waitingTime", waitingTime)
-        Listener.put(id, "execTime", execTime)
-
-        Listener.put(id, "totalTime", waitingTime + execTime)
+    /**
+     * Does the same at putTimings, but in the case of a failed job
+     * Does:
+     *  totalTime = failed - submitted
+     *  execTime = failed - running
+     *  waitingTime = running - submitted
+     * @param job The job that failed
+     */
+    def failedTimings(job : ExecutionJob) = {
+        putDiff(job, "totalTime", FAILED.toString(), SUBMITTED.toString())
+        putDiff(job, "execTime", FAILED.toString(), RUNNING.toString())
+        putDiff(job, "waitingTime", RUNNING.toString(), SUBMITTED.toString())
     }
 }
