@@ -94,21 +94,20 @@ class EnvListener(env : Environment) extends Runnable {
             case (_, JobStateChanged(job, SUBMITTED, READY)) =>
                 create(job)
                 fillInputs(job)
-                processNewState(job, SUBMITTED, READY)
+                processTransition(job, SUBMITTED, READY)
             case (_, JobStateChanged(_, RUNNING, RUNNING)) => // ugly way to mask those transition
             case (_, JobStateChanged(_, SUBMITTED, SUBMITTED)) => // ugly way to mask those transition
             case (_, JobStateChanged(job, KILLED, oldState)) =>
                 putTimings(job)
                 Listener.put(shortId(job), "failed", false)
                 Listener.job_csv(shortId(job))
-                Listener.print_job(shortId(job))
                 delete(job)
             case (_, JobStateChanged(job, FAILED, _)) =>
                 failedTimings(job)
                 Listener.put(shortId(job), "failed", true)
                 Listener.job_csv(shortId(job))
                 delete(job)
-            case (_, JobStateChanged(job, newState, oldState)) => processNewState(job, newState, oldState)
+            case (_, JobStateChanged(job, newState, oldState)) => processTransition(job, newState, oldState)
         }
     }
 
@@ -116,7 +115,7 @@ class EnvListener(env : Environment) extends Runnable {
      * Create the data structures needed to monitor a job
      * @param job The job
      */
-    def create(job : ExecutionJob) = {
+    private def create(job : ExecutionJob) = {
         L.info(s"Catched $job.")
 
         shortId(job) = genShortId(job)
@@ -131,7 +130,7 @@ class EnvListener(env : Environment) extends Runnable {
      * Remove entry in jobTimings, and in shortId
      * @param job The job to be deleted
      */
-    def delete(job : ExecutionJob) = {
+    private def delete(job : ExecutionJob) = {
         jobTimings.remove(shortId(job))
 
         shortId.remove(job)
@@ -143,7 +142,7 @@ class EnvListener(env : Environment) extends Runnable {
      * And all the values defined in EnvListener.date_list
      * @param job The job
      */
-    def fillInputs(job : ExecutionJob) = {
+    private def fillInputs(job : ExecutionJob) = {
         // TODO Find more inputs about the job itself
         // But like what ? Kind of task ? Content to upload ?
         val id = shortId(job)
@@ -163,7 +162,7 @@ class EnvListener(env : Environment) extends Runnable {
      * @param job The job
      * @return Everything at the right of the '@'
      */
-    def genShortId(job: ExecutionJob) : String = {
+    private def genShortId(job: ExecutionJob) : String = {
         val tmp = job.toString
 
         tmp.drop(tmp.indexOf('@') + 1)
@@ -174,7 +173,7 @@ class EnvListener(env : Environment) extends Runnable {
      * @param job The job
      * @param newState The new state
      */
-    def processNewState(job: ExecutionJob, newState: ExecutionState, oldState : ExecutionState) = {
+    private def processTransition(job: ExecutionJob, newState: ExecutionState, oldState : ExecutionState) = {
         L.info(s"$job\n\t$oldState -> $newState")
 
         jobTimings(shortId(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis / 1000
@@ -189,7 +188,7 @@ class EnvListener(env : Environment) extends Runnable {
      * @param laterState The most recent state.
      * @param earlyState The oldest state.
      */
-    def putDiff(job : ExecutionJob, name : String,  laterState : String, earlyState : String) = {
+    private def putDiff(job : ExecutionJob, name : String,  laterState : String, earlyState : String) = {
         val id : String = shortId(job)
 
         var v : Long = 0
@@ -209,7 +208,7 @@ class EnvListener(env : Environment) extends Runnable {
      *  waitingTime = running - submitted
      * @param job The job
      */
-    def putTimings(job : ExecutionJob) = {
+    private def putTimings(job : ExecutionJob) = {
         putDiff(job, "totalTime", DONE.toString(), SUBMITTED.toString())
         putDiff(job, "execTime", DONE.toString(), RUNNING.toString())
         putDiff(job, "waitingTime", RUNNING.toString(), SUBMITTED.toString())
@@ -223,7 +222,7 @@ class EnvListener(env : Environment) extends Runnable {
      *  waitingTime = running - submitted
      * @param job The job that failed
      */
-    def failedTimings(job : ExecutionJob) = {
+    private def failedTimings(job : ExecutionJob) = {
         putDiff(job, "totalTime", FAILED.toString(), SUBMITTED.toString())
         putDiff(job, "execTime", FAILED.toString(), RUNNING.toString())
         putDiff(job, "waitingTime", RUNNING.toString(), SUBMITTED.toString())

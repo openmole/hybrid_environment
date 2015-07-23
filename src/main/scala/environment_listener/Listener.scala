@@ -14,6 +14,7 @@ object Listener extends Logger{
     private val env_list = mutable.MutableList[Environment]()
 	private val data_store = TMap[String, TMap[String, Any]]()
     private val csv_path : String = "/tmp/openmole.csv"
+    private var metrics : List[String] = null
 
 
     /**
@@ -91,15 +92,39 @@ object Listener extends Logger{
 
 
     /**
+     * Dump the data store in the given csv file.
+     * File will be created if does not exist, otherwise will append to it.
+     * @param path The path to the csv file
+     * @return
+     */
+    def dump_to_csv(path : String) = atomic { implicit ctx =>
+        Log.logger.info(s"Dumping data store to $csv_path")
+        val file: File = new File(csv_path)
+
+        if (!file.exists()) {
+            create_csv(file)
+        } else if (metrics == null) {
+            metrics = data_store(data_store.keySet.head).keys.toList.sorted
+        }
+
+        for(job_id : String <- data_store.keySet){
+            write_job_csv(job_id, file)
+        }
+    }
+
+
+    /**
      * Write all the measurements of the job to the given csv file.
      * @param job_id The job to be written.
      */
-    def job_csv(job_id : String){
+    def job_csv(job_id : String) = atomic { implicit ctx =>
         Log.logger.info(s"Writing job $job_id measurements to $csv_path.")
         val file : File = new File(csv_path)
 
         if(!file.exists()){
             create_csv(file)
+        } else if (metrics == null) {
+            metrics = data_store(data_store.keySet.head).keys.toList.sorted
         }
 
         write_job_csv(job_id, file)
@@ -115,7 +140,7 @@ object Listener extends Logger{
     private def write_job_csv(job_id : String, file: File) = atomic { implicit ctx =>
         val writer = new BufferedWriter(new FileWriter(file, true))
 
-        for(metric : String <- data_store(job_id).keys){
+        for(metric : String <- metrics){
             writer.write(data_store(job_id)(ctx)(metric).toString)
             writer.write(", ")
         }
@@ -145,7 +170,9 @@ object Listener extends Logger{
     private def write_header(file : File) = atomic { implicit ctx =>
         println("Writing header")
         val writer = new BufferedWriter(new FileWriter(file, true))
-        for (metric: String <- data_store(data_store.keySet.head).keys) {
+
+        metrics = data_store(data_store.keySet.head).keys.toList.sorted
+        for(metric: String <- metrics) {
             println(metric)
             writer.write(metric)
             writer.write(", ")
@@ -153,17 +180,5 @@ object Listener extends Logger{
         writer.write("\n")
 
         writer.close()
-    }
-
-
-    /**
-     * Dump the data store in the given csv file.
-     * File will be created if does not exist, otherwise will append to it.
-     * @param path The path to the csv file
-     * @return
-     */
-    def dump_to_csv(path : String) = {
-        // TODO implement
-        throw new NotImplementedError()
     }
 }
