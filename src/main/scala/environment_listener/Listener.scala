@@ -25,6 +25,15 @@ object Listener extends Logger {
   }
 
   /**
+   * Register a collection of new environments that will be listened to
+   * Still need to call start_monitoring to actually start to listen
+   * @param envs The environments to monitor
+   */
+  def registerEnvironments(envs: Environment*) = {
+    env_list ++= envs
+  }
+
+  /**
    * Launch a new thread of EnvListener for each environment registered
    */
   def start_monitoring() = atomic { implicit ctx =>
