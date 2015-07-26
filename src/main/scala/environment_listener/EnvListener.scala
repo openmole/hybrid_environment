@@ -14,6 +14,7 @@ import org.openmole.plugin.environment.condor.CondorEnvironment
 
 import org.openmole.core.event._
 
+
 object EnvListener {
   /**
    * Will contain the list of all the date measurements done at the submission of the job

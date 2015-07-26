@@ -26,10 +26,11 @@ import org.openmole.tool.file._
 
 import scala.concurrent.stm._
 
-object Listener extends Logger {
-  private val env_list = mutable.MutableList[Environment]()
-  private val data_store = TMap[String, TMap[String, Any]]()
-  private val csv_path: String = "/tmp/openmole.csv"
+object Listener extends Logger{
+    private val env_list = mutable.MutableList[Environment]()
+	private val data_store = TMap[String, TMap[String, Any]]()
+    private val csv_path : String = "/tmp/openmole.csv"
+    private var metrics : List[String] = null
 
   /**
    * Register a new environment that will be listened to
@@ -83,100 +84,143 @@ object Listener extends Logger {
     data_store(job_id)(ctx)(m) = v
   }
 
-  // TODO Create class for IO
-  /**
-   * Will print all the data contained in the data_store
-   * Should be replaced by a function writing everything in a file
-   */
-  def print_data() = atomic { implicit ctx =>
-    // FIXME Find a way in the openmole script to call this function at the end
-    Log.logger.info("Printing data...")
-
-    for (job_id: String <- data_store.keys) {
-      print_job(job_id)
-    }
-  }
-
-  /**
-   * Print all the informations stored about the job_id.
-   * @param job_id The job to display
-   */
-  def print_job(job_id: String) = atomic { implicit ctx =>
-    println(s"Job: $job_id")
-    for (metric: String <- data_store(job_id).keys) {
-      println(s"\t$metric : ${data_store(job_id)(ctx)(metric)}")
-    }
-  }
-
-  /**
-   * Write all the measurements of the job to the given csv file.
-   * @param job_id The job to be written.
-   */
-  def job_csv(job_id: String) {
-    Log.logger.info(s"Writing job $job_id measurements to $csv_path.")
-    val file: File = new File(csv_path)
-
-    if (!file.exists()) {
-      create_csv(file)
+    /**
+     * Will write a value in the data_store
+     *
+     * NEEDS to be rewritten, does nothing at the moment
+     *
+     * @param job_id The job id
+     * @param m The metric name
+     * @param v The actual value
+     */
+    def put(job_id: String, m: String, v: Any) = atomic { implicit ctx =>
+        data_store(job_id)(ctx)(m) = v
     }
 
-    write_job_csv(job_id, file)
-  }
 
-  /**
-   * Actually write the job_id measures in the file.
-   * The file _must_ be created before.
-   * @param job_id The job to be written.
-   * @param file The destination file.
-   */
-  private def write_job_csv(job_id: String, file: File) = atomic { implicit ctx =>
+    // TODO Create class for IO
+    /**
+      * Will print all the data contained in the data_store
+     * Should be replaced by a function writing everything in a file
+     */
+    def print_data() = atomic { implicit ctx =>
+        // FIXME Find a way in the openmole script to call this function at the end
+        Log.logger.info("Printing data...")
 
-    file.withWriter { writer =>
-      for (metric: String <- data_store(job_id).keys) {
-        writer.append(data_store(job_id)(ctx)(metric).toString)
-        writer.append(", ")
-      }
-      writer.append("\n")
+        for(job_id : String <- data_store.keys) {
+            print_job(job_id)
+        }
+	}
+
+
+    /**
+     * Print all the informations stored about the job_id.
+     * @param job_id The job to display
+     */
+    def print_job(job_id : String) = atomic { implicit ctx =>
+        println(s"Job: $job_id")
+        for (metric: String <- data_store(job_id).keys) {
+            println(s"\t$metric : ${data_store(job_id)(ctx)(metric)}")
+        }
     }
-  }
 
-  /**
-   * Create the csv file, and then call the write_header function
-   * @param file The file to be created
-   */
-  private def create_csv(file: File) {
-    Log.logger.info(s"Creating the file $file.")
-    file.getParentFile.mkdirs
-    file.createNewFile
 
-    write_header(file)
-  }
+    /**
+     * Dump the data store in the given csv file.
+     * File will be created if does not exist, otherwise will append to it.
+     * @param path The path to the csv file
+     * @return
+     */
+    def dump_to_csv(path : String) = atomic { implicit ctx =>
+        Log.logger.info(s"Dumping data store to $csv_path")
+        val file: File = new File(csv_path)
 
-  /**
-   * Put the header (name of the metrics) to the given file
-   * @param file The file where the header should be put
-   */
-  private def write_header(file: File) = atomic { implicit ctx =>
-    println("Writing header")
-    val writer = new BufferedWriter(new FileWriter(file, true))
-    for (metric: String <- data_store(data_store.keySet.head).keys) {
-      println(metric)
-      writer.write(metric)
-      writer.write(", ")
+        if (!file.exists()) {
+            create_csv(file)
+        } else if (metrics == null) {
+            metrics = data_store(data_store.keySet.head).keys.toList.sorted
+        }
+
+        for(job_id : String <- data_store.keySet){
+            write_job_csv(job_id, file)
+        }
     }
-    writer.write("\n")
 
-    writer.close()
-  }
 
-  /**
-   * Dump the data store in the given csv file.
-   * File will be created if does not exist, otherwise will append to it.
-   * @param path The path to the csv file
-   * @return
-   */
-  def dump_to_csv(path: String) = {
-    // TODO implement
-    throw new NotImplementedError()
-  }
+    /**
+     * Write all the measurements of the job to the given csv file.
+     * @param job_id The job to be written.
+     */
+    def job_csv(job_id : String){
+        Log.logger.info(s"Writing job $job_id measurements to $csv_path.")
+        val file : File = new File(csv_path)
+
+        if(!file.exists()){
+            create_csv(file)
+        }
+
+        write_job_csv(job_id, file)
+    }
+
+
+    /**
+     * Actually write the job_id measures in the file.
+     * The file _must_ be created before.
+     * @param job_id The job to be written.
+     * @param file The destination file.
+     */
+    private def write_job_csv(job_id : String, file: File) = atomic { implicit ctx =>
+        val writer = new BufferedWriter(new FileWriter(file, true))
+
+        for(metric : String <- data_store(job_id).keys){
+            writer.write(data_store(job_id)(ctx)(metric).toString)
+            writer.write(", ")
+        }
+        writer.write("\n")
+
+        writer.close()
+    }
+
+
+    /**
+     * Create the csv file, and then call the write_header function
+     * @param file The file to be created
+     */
+    private def create_csv(file : File) {
+        Log.logger.info(s"Creating the file $file.")
+        file.getParentFile.mkdirs
+        file.createNewFile
+
+        write_header(file)
+    }
+
+
+    /**
+     * Put the header (name of the metrics) to the given file
+     * @param file The file where the header should be put
+     */
+    private def write_header(file : File) = atomic { implicit ctx =>
+        println("Writing header")
+        val writer = new BufferedWriter(new FileWriter(file, true))
+        for (metric: String <- data_store(data_store.keySet.head).keys) {
+            println(metric)
+            writer.write(metric)
+            writer.write(", ")
+        }
+        writer.write("\n")
+
+        writer.close()
+    }
+
+
+    /**
+     * Dump the data store in the given csv file.
+     * File will be created if does not exist, otherwise will append to it.
+     * @param path The path to the csv file
+     * @return
+     */
+    def dump_to_csv(path : String) = {
+        // TODO implement
+        throw new NotImplementedError()
+    }
 }
