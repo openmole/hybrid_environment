@@ -94,8 +94,6 @@ class EnvListener(env: Environment) extends Runnable {
         create(job)
         fillInputs(job)
         processNewState(job, SUBMITTED, READY)
-      case (_, JobStateChanged(_, RUNNING, RUNNING)) => // ugly way to mask those transition
-      case (_, JobStateChanged(_, SUBMITTED, SUBMITTED)) => // ugly way to mask those transition
       case (_, JobStateChanged(job, KILLED, oldState)) =>
         putTimings(job)
         Listener.put(shortId(job), "failed", false)
