@@ -1,5 +1,19 @@
-// TODO License
-
+/*
+ * Copyright (C) 2015 Hoel Kervadec
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package environment_listener
 
 import java.io.{ BufferedWriter, FileWriter, File }
@@ -7,6 +21,8 @@ import java.io.{ BufferedWriter, FileWriter, File }
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
+
+import org.openmole.tool.file._
 
 import scala.concurrent.stm._
 
@@ -114,15 +130,14 @@ object Listener extends Logger {
    * @param file The destination file.
    */
   private def write_job_csv(job_id: String, file: File) = atomic { implicit ctx =>
-    val writer = new BufferedWriter(new FileWriter(file, true))
 
-    for (metric: String <- data_store(job_id).keys) {
-      writer.write(data_store(job_id)(ctx)(metric).toString)
-      writer.write(", ")
+    file.withWriter { writer =>
+      for (metric: String <- data_store(job_id).keys) {
+        writer.append(data_store(job_id)(ctx)(metric).toString)
+        writer.append(", ")
+      }
+      writer.append("\n")
     }
-    writer.write("\n")
-
-    writer.close()
   }
 
   /**
