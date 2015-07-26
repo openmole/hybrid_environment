@@ -16,8 +16,6 @@
  */
 package environment_listener
 
-import java.io.{ BufferedWriter, FileWriter, File }
-
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
@@ -152,15 +150,14 @@ object Listener extends Logger {
    * @param file The destination file.
    */
   private def write_job_csv(job_id: String, file: File) = atomic { implicit ctx =>
-    val writer = new BufferedWriter(new FileWriter(file, true))
 
-    for (metric: String <- data_store(job_id).keys) {
-      writer.write(data_store(job_id)(ctx)(metric).toString)
-      writer.write(", ")
+    file.withWriter { writer =>
+      for (metric: String <- data_store(job_id).keys) {
+        writer.append(data_store(job_id)(ctx)(metric).toString)
+        writer.append(", ")
+      }
+      writer.append("\n")
     }
-    writer.write("\n")
-
-    writer.close()
   }
 
   /**
@@ -181,15 +178,15 @@ object Listener extends Logger {
    */
   private def write_header(file: File) = atomic { implicit ctx =>
     println("Writing header")
-    val writer = new BufferedWriter(new FileWriter(file, true))
-    for (metric: String <- data_store(data_store.keySet.head).keys) {
-      println(metric)
-      writer.write(metric)
-      writer.write(", ")
-    }
-    writer.write("\n")
 
-    writer.close()
+    file.withWriter { writer =>
+      for (metric: String <- data_store(data_store.keySet.head).keys) {
+        println(metric)
+        writer.append(metric)
+        writer.append(", ")
+      }
+      writer.append("\n")
+    }
   }
 
 }
