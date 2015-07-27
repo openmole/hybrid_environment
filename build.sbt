@@ -1,3 +1,5 @@
+import scalariform.formatter.preferences._
+
 name := "environment_listener"
 
 version := "1.0"
@@ -11,8 +13,6 @@ OsgiKeys.exportPackage := Seq("environment_listener.*")
 OsgiKeys.importPackage := Seq("*")
 
 OsgiKeys.privatePackage := Seq("")
-
-// scalariformSettings
 
 resolvers += 
   "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
@@ -36,3 +36,6 @@ libraryDependencies += "org.openmole" %% "org-openmole-plugin-environment-slurm"
 libraryDependencies += ("org.scala-stm" %% "scala-stm" % "0.7")
 
 scalariformSettings
+
+ScalariformKeys.preferences := ScalariformKeys.preferences.value
+        .setPreference(IndentSpaces, 4)
