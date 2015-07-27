@@ -11,15 +11,15 @@ import scala.concurrent.stm._
 object Listener extends Logger {
     private val env_list = mutable.MutableList[Environment]()
     private val data_store = TMap[String, TMap[String, Any]]()
-    private val csv_path: String = "/tmp/openmole.csv"
     private var metrics: List[String] = null
+    var csv_path: String = "/tmp/openmole.csv"
 
     /**
      * Register a new environment that will be listened to
      * Still need to call start_monitoring to actually start to listen
      * @param env The environment to listen
      */
-    def register_env(env: Environment) = {
+    def registerEnvironment(env: Environment) {
         env_list += env
     }
 
@@ -28,15 +28,14 @@ object Listener extends Logger {
      * Still need to call start_monitoring to actually start to listen
      * @param envs The environments to monitor
      */
-    def registerEnvironments(envs: Environment*) = {
+    def registerEnvironments(envs: Environment*) {
         env_list ++= envs
     }
 
     /**
      * Launch a new thread of EnvListener for each environment registered
      */
-    def start_monitoring() = atomic { implicit ctx =>
-
+    def startMonitoring() {
         for (env <- env_list) {
             new EnvListener(env).run()
         }
@@ -46,7 +45,7 @@ object Listener extends Logger {
      * Create the instance of the Tmap for the job id
      * @param job_id The job id
      */
-    def create_job_map(job_id: String) = atomic { implicit ctx =>
+    def createJobMap(job_id: String) = atomic { implicit ctx =>
         if (data_store contains job_id) {
             Log.logger.severe(s"$job_id already created")
         }
@@ -71,12 +70,12 @@ object Listener extends Logger {
      * Will print all the data contained in the data_store
      * Should be replaced by a function writing everything in a file
      */
-    def print_data() = atomic { implicit ctx =>
+    def printData() = atomic { implicit ctx =>
         // FIXME Find a way in the openmole script to call this function at the end
         Log.logger.info("Printing data...")
 
         for (job_id: String <- data_store.keys) {
-            print_job(job_id)
+            printJob(job_id)
         }
     }
 
@@ -84,7 +83,7 @@ object Listener extends Logger {
      * Print all the informations stored about the job_id.
      * @param job_id The job to display
      */
-    def print_job(job_id: String) = atomic { implicit ctx =>
+    def printJob(job_id: String) = atomic { implicit ctx =>
         println(s"Job: $job_id")
         for (metric: String <- data_store(job_id).keys) {
             println(s"\t$metric : ${data_store(job_id)(ctx)(metric)}")
@@ -97,18 +96,18 @@ object Listener extends Logger {
      * @param path The path to the csv file
      * @return
      */
-    def dump_to_csv(path: String) = atomic { implicit ctx =>
+    def dumpToCSV(path: String) = atomic { implicit ctx =>
         Log.logger.info(s"Dumping data store to $csv_path")
         val file: File = new File(csv_path)
 
         if (!file.exists()) {
-            create_csv(file)
+            createCSV(file)
         } else if (metrics == null) {
-            metrics = data_store(data_store.keySet.head).keys.toList.sorted
+            initMetrics()
         }
 
         for (job_id: String <- data_store.keySet) {
-            write_job_csv(job_id, file)
+            writeJobCSV(job_id, file)
         }
     }
 
@@ -116,15 +115,17 @@ object Listener extends Logger {
      * Write all the measurements of the job to the given csv file.
      * @param job_id The job to be written.
      */
-    def job_csv(job_id: String) {
+    def jobCSV(job_id: String) {
         Log.logger.info(s"Writing job $job_id measurements to $csv_path.")
         val file: File = new File(csv_path)
 
         if (!file.exists()) {
-            create_csv(file)
+            createCSV(file)
+        } else if (metrics == null) {
+            initMetrics()
         }
 
-        write_job_csv(job_id, file)
+        writeJobCSV(job_id, file)
     }
 
     /**
@@ -133,10 +134,10 @@ object Listener extends Logger {
      * @param job_id The job to be written.
      * @param file The destination file.
      */
-    private def write_job_csv(job_id: String, file: File) = atomic { implicit ctx =>
+    private def writeJobCSV(job_id: String, file: File) = atomic { implicit ctx =>
 
         file.withWriter { writer =>
-            for (metric: String <- data_store(job_id).keys) {
+            for (metric: String <- metrics) {
                 writer.append(data_store(job_id)(ctx)(metric).toString)
                 writer.append(", ")
             }
@@ -145,31 +146,40 @@ object Listener extends Logger {
     }
 
     /**
-     * Create the csv file, and then call the write_header function
+     * Create the csv file, and then call the writeHeader function
      * @param file The file to be created
      */
-    private def create_csv(file: File) {
+    private def createCSV(file: File) {
         Log.logger.info(s"Creating the file $file.")
         file.getParentFile.mkdirs
         file.createNewFile
 
-        write_header(file)
+        writeHeader(file)
     }
 
     /**
      * Put the header (name of the metrics) to the given file
      * @param file The file where the header should be put
      */
-    private def write_header(file: File) = atomic { implicit ctx =>
+    private def writeHeader(file: File) {
         println("Writing header")
 
+        initMetrics()
         file.withWriter { writer =>
-            for (metric: String <- data_store(data_store.keySet.head).keys) {
+            for (metric: String <- metrics) {
                 println(metric)
                 writer.append(metric)
                 writer.append(", ")
             }
             writer.append("\n")
         }
+    }
+
+    /**
+     * Initialize the metrics attribute.
+     * Will take every metrics contained in the first datapoint, and sort them.
+     */
+    private def initMetrics() = atomic { implicit ctx =>
+        metrics = data_store(data_store.keySet.head).keys.toList.sorted
     }
 }

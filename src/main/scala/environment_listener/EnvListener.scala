@@ -11,6 +11,7 @@ import org.openmole.core.workflow.execution.Environment.JobStateChanged
 import org.openmole.plugin.environment.slurm.SLURMEnvironment
 import org.openmole.plugin.environment.ssh.SSHEnvironment
 import org.openmole.plugin.environment.condor.CondorEnvironment
+//import org.openmole.plugin.environment.egi.EGIEnvironment
 
 import org.openmole.core.event._
 
@@ -18,7 +19,7 @@ object EnvListener {
     /**
      * Will contain the list of all the date measurements done at the submission of the job
      */
-    val date_list = mutable.MutableList[(SimpleDateFormat, String)]()
+    private val date_list = mutable.MutableList[(SimpleDateFormat, String)]()
 
     date_list += ((new SimpleDateFormat("HH"), "hour"))
     date_list += ((new SimpleDateFormat("mm"), "min"))
@@ -30,10 +31,10 @@ object EnvListener {
 }
 
 class EnvListener(env: Environment) extends Runnable {
-    val jobTimings = mutable.HashMap[String, mutable.HashMap[String, Long]]()
+    private val jobTimings = mutable.HashMap[String, mutable.HashMap[String, Long]]()
 
-    val shortId = mutable.HashMap[ExecutionJob, String]()
-    val L = Listener.Log.logger
+    private val shortId = mutable.HashMap[ExecutionJob, String]()
+    private val L = Listener.Log.logger
 
     /**
      * The name of the environment.
@@ -41,10 +42,11 @@ class EnvListener(env: Environment) extends Runnable {
      * Condor => user@host
      * SLURM => user@host
      */
-    val env_name: String = env match {
+    private val env_name: String = env match {
         case e: SSHEnvironment => e.user ++ "@" ++ e.host
         case e: CondorEnvironment => e.user ++ "@" ++ e.host
         case e: SLURMEnvironment => e.user ++ "@" ++ e.host
+        //        case e: EGIEnvironment => e.voName
         case _ =>
             L.severe(s"Unsupported environment (envName): $env.")
             ""
@@ -56,10 +58,11 @@ class EnvListener(env: Environment) extends Runnable {
      * Condor
      * SLURM
      */
-    val env_kind: String = env match {
+    private val env_kind: String = env match {
         case _: SSHEnvironment => "SSHEnvironment"
         case _: CondorEnvironment => "CondorEnvironment"
         case _: SLURMEnvironment => "SLURMEnvironment"
+        //        case _: EGIEnvironment => "EGIEnvironment"
         case _ =>
             L.severe(s"Unsupported environment (envKind): $env.")
             ""
@@ -71,16 +74,26 @@ class EnvListener(env: Environment) extends Runnable {
      * Condor
      * SLURM
      */
-    val core: Int = env match {
+    private val core: Int = env match {
         case e: SSHEnvironment => e.nbSlots
         case e: CondorEnvironment => e.threads.getOrElse(1)
         case e: SLURMEnvironment => e.threads.getOrElse(1)
+        //        case e: EGIEnvironment => e.threads.getOrElse(1)
         case _ =>
             L.severe(s"Unsupported environment (core): $env.")
             -1
     }
 
-    // TODO memory
+    // TODO Improve default case
+    private val memory: Int = env match {
+        case e: SSHEnvironment => 0
+        case e: CondorEnvironment => e.memory.getOrElse(0)
+        case e: SLURMEnvironment => e.memory.getOrElse(0)
+        //        case e: EGIEnvironment => e.memory.getOrElse(0)
+        case _ =>
+            L.severe(s"Unsupported environment (memory): $env.")
+            -1
+    }
 
     /**
      * Start to monitor the environment
@@ -97,13 +110,13 @@ class EnvListener(env: Environment) extends Runnable {
             case (_, JobStateChanged(job, KILLED, oldState)) =>
                 putTimings(job)
                 Listener.put(shortId(job), "failed", false)
-                Listener.job_csv(shortId(job))
-                Listener.print_job(shortId(job))
+                Listener.jobCSV(shortId(job))
+                Listener.printJob(shortId(job))
                 delete(job)
             case (_, JobStateChanged(job, FAILED, _)) =>
                 failedTimings(job)
                 Listener.put(shortId(job), "failed", true)
-                Listener.job_csv(shortId(job))
+                Listener.jobCSV(shortId(job))
                 delete(job)
             case (_, JobStateChanged(job, newState, oldState)) => processNewState(job, newState, oldState)
         }
@@ -113,13 +126,13 @@ class EnvListener(env: Environment) extends Runnable {
      * Create the data structures needed to monitor a job
      * @param job The job
      */
-    def create(job: ExecutionJob) = {
+    private def create(job: ExecutionJob) = {
         L.info(s"Catched $job.")
 
         shortId(job) = genShortId(job)
         val id = shortId(job)
 
-        Listener.create_job_map(id)
+        Listener.createJobMap(id)
         jobTimings(id) = new mutable.HashMap[String, Long]
     }
 
@@ -128,7 +141,7 @@ class EnvListener(env: Environment) extends Runnable {
      * Remove entry in jobTimings, and in shortId
      * @param job The job to be deleted
      */
-    def delete(job: ExecutionJob) = {
+    private def delete(job: ExecutionJob) = {
         jobTimings.remove(shortId(job))
 
         shortId.remove(job)
@@ -140,7 +153,7 @@ class EnvListener(env: Environment) extends Runnable {
      * And all the values defined in EnvListener.date_list
      * @param job The job
      */
-    def fillInputs(job: ExecutionJob) = {
+    private def fillInputs(job: ExecutionJob) = {
         // TODO Find more inputs about the job itself
         // But like what ? Kind of task ? Content to upload ?
         val id = shortId(job)
@@ -148,6 +161,7 @@ class EnvListener(env: Environment) extends Runnable {
         Listener.put(id, "env_name", env_name)
         Listener.put(id, "env_kind", env_kind)
         Listener.put(id, "core", core)
+        Listener.put(id, "memory", memory)
 
         val t = Calendar.getInstance.getTime
         for ((dateFormat, name) <- EnvListener.date_list) {
@@ -160,7 +174,7 @@ class EnvListener(env: Environment) extends Runnable {
      * @param job The job
      * @return Everything at the right of the '@'
      */
-    def genShortId(job: ExecutionJob): String = {
+    private def genShortId(job: ExecutionJob): String = {
         val tmp = job.toString
 
         tmp.drop(tmp.indexOf('@') + 1)
@@ -171,7 +185,7 @@ class EnvListener(env: Environment) extends Runnable {
      * @param job The job
      * @param newState The new state
      */
-    def processNewState(job: ExecutionJob, newState: ExecutionState, oldState: ExecutionState) = {
+    private def processNewState(job: ExecutionJob, newState: ExecutionState, oldState: ExecutionState) = {
         L.info(s"$job\n\t$oldState -> $newState")
 
         jobTimings(shortId(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis / 1000
@@ -186,7 +200,7 @@ class EnvListener(env: Environment) extends Runnable {
      * @param laterState The most recent state.
      * @param earlyState The oldest state.
      */
-    def putDiff(job: ExecutionJob, name: String, laterState: String, earlyState: String) = {
+    private def putDiff(job: ExecutionJob, name: String, laterState: String, earlyState: String) = {
         val id: String = shortId(job)
 
         var v: Long = 0
@@ -206,7 +220,7 @@ class EnvListener(env: Environment) extends Runnable {
      *  waitingTime = running - submitted
      * @param job The job
      */
-    def putTimings(job: ExecutionJob) = {
+    private def putTimings(job: ExecutionJob) = {
         putDiff(job, "totalTime", DONE.toString(), SUBMITTED.toString())
         putDiff(job, "execTime", DONE.toString(), RUNNING.toString())
         putDiff(job, "waitingTime", RUNNING.toString(), SUBMITTED.toString())
@@ -220,7 +234,7 @@ class EnvListener(env: Environment) extends Runnable {
      *  waitingTime = running - submitted
      * @param job The job that failed
      */
-    def failedTimings(job: ExecutionJob) = {
+    private def failedTimings(job: ExecutionJob) = {
         putDiff(job, "totalTime", FAILED.toString(), SUBMITTED.toString())
         putDiff(job, "execTime", FAILED.toString(), RUNNING.toString())
         putDiff(job, "waitingTime", RUNNING.toString(), SUBMITTED.toString())
