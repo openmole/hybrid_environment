@@ -11,7 +11,7 @@ import scala.concurrent.stm._
 object Listener extends Logger {
     private val env_list = mutable.MutableList[Environment]()
     private val data_store = TMap[String, TMap[String, Any]]()
-    private var metrics: List[String] = null
+    private var metrics: mutable.MutableList[String] = null
     var csv_path: String = "/tmp/openmole.csv"
 
     /**
@@ -136,7 +136,7 @@ object Listener extends Logger {
      */
     private def writeJobCSV(job_id: String, file: File) = atomic { implicit ctx =>
 
-        file.withWriter { writer =>
+        file.withWriter(true) { writer =>
             for (metric: String <- metrics) {
                 writer.append(data_store(job_id)(ctx)(metric).toString)
                 writer.append(", ")
@@ -165,7 +165,7 @@ object Listener extends Logger {
         println("Writing header")
 
         initMetrics()
-        file.withWriter { writer =>
+        file.withWriter(true) { writer =>
             for (metric: String <- metrics) {
                 println(metric)
                 writer.append(metric)
@@ -178,8 +178,13 @@ object Listener extends Logger {
     /**
      * Initialize the metrics attribute.
      * Will take every metrics contained in the first datapoint, and sort them.
+     * If the metrics for waitingTime, execTime and totalTime are not in there, add them.
      */
     private def initMetrics() = atomic { implicit ctx =>
-        metrics = data_store(data_store.keySet.head).keys.toList.sorted
+        metrics = mutable.MutableList[String]()
+        metrics ++= data_store(data_store.keySet.head).keys.toList.sorted
+
+        // Not great but avoid hardcoding the whole list
+        List("waitingTime", "execTime", "totalTime").filterNot(metrics.contains).map(metrics.+=)
     }
 }

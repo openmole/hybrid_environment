@@ -186,7 +186,7 @@ class EnvListener(env: Environment) extends Runnable {
      * @param newState The new state
      */
     private def processNewState(job: ExecutionJob, newState: ExecutionState, oldState: ExecutionState) = {
-        L.info(s"$job\n\t$oldState -> $newState")
+        //        L.info(s"$job\n\t$oldState -> $newState")
 
         jobTimings(shortId(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis / 1000
     }
