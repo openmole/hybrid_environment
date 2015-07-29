@@ -74,9 +74,7 @@ object Listener extends Logger {
         // FIXME Find a way in the openmole script to call this function at the end
         Log.logger.info("Printing data...")
 
-        for (job_id: String <- data_store.keys) {
-            printJob(job_id)
-        }
+        data_store.keys.foreach(printJob)
     }
 
     /**
@@ -182,9 +180,11 @@ object Listener extends Logger {
      */
     private def initMetrics() = atomic { implicit ctx =>
         metrics = mutable.MutableList[String]()
-        metrics ++= data_store(data_store.keySet.head).keys.toList.sorted
+        metrics ++= data_store(data_store.keySet.head).keys.toList
 
         // Not great but avoid hardcoding the whole list
-        List("waitingTime", "execTime", "totalTime").filterNot(metrics.contains).map(metrics.+=)
+        metrics ++= List("waitingTime", "execTime", "totalTime", "failed").filterNot(metrics.contains)
+
+        metrics.sorted
     }
 }

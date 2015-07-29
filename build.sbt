@@ -33,6 +33,8 @@ libraryDependencies += "org.openmole" %% "org-openmole-plugin-environment-condor
 
 libraryDependencies += "org.openmole" %% "org-openmole-plugin-environment-slurm" % openMOLEVersion
 
+libraryDependencies += "org.openmole" %% "org-openmole-plugin-environment-egi" % openMOLEVersion
+
 libraryDependencies += ("org.scala-stm" %% "scala-stm" % "0.7")
 
 scalariformSettings

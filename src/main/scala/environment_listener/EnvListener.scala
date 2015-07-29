@@ -35,6 +35,7 @@ class EnvListener(env: Environment) extends Runnable {
 
     private val shortId = mutable.HashMap[ExecutionJob, String]()
     private val L = Listener.Log.logger
+    private var n: Long = 0
 
     /**
      * The name of the environment.
@@ -111,7 +112,7 @@ class EnvListener(env: Environment) extends Runnable {
                 putTimings(job)
                 Listener.put(shortId(job), "failed", false)
                 Listener.jobCSV(shortId(job))
-                Listener.printJob(shortId(job))
+                // Listener.printJob(shortId(job))
                 delete(job)
             case (_, JobStateChanged(job, FAILED, _)) =>
                 failedTimings(job)
@@ -154,8 +155,6 @@ class EnvListener(env: Environment) extends Runnable {
      * @param job The job
      */
     private def fillInputs(job: ExecutionJob) = {
-        // TODO Find more inputs about the job itself
-        // But like what ? Kind of task ? Content to upload ?
         val id = shortId(job)
 
         Listener.put(id, "env_name", env_name)
@@ -177,7 +176,8 @@ class EnvListener(env: Environment) extends Runnable {
     private def genShortId(job: ExecutionJob): String = {
         val tmp = job.toString
 
-        tmp.drop(tmp.indexOf('@') + 1)
+        n += 1
+        n.toString ++ "-" ++ tmp.drop(tmp.indexOf('@') + 1)
     }
 
     /**
