@@ -11,7 +11,7 @@ import org.openmole.core.workflow.execution.Environment.JobStateChanged
 import org.openmole.plugin.environment.slurm.SLURMEnvironment
 import org.openmole.plugin.environment.ssh.SSHEnvironment
 import org.openmole.plugin.environment.condor.CondorEnvironment
-//import org.openmole.plugin.environment.egi.EGIEnvironment
+import org.openmole.plugin.environment.egi.EGIEnvironment
 
 import org.openmole.core.event._
 
@@ -47,7 +47,7 @@ class EnvListener(env: Environment) extends Runnable {
         case e: SSHEnvironment => e.user ++ "@" ++ e.host
         case e: CondorEnvironment => e.user ++ "@" ++ e.host
         case e: SLURMEnvironment => e.user ++ "@" ++ e.host
-        //        case e: EGIEnvironment => e.voName
+        case e: EGIEnvironment => e.voName
         case _ =>
             L.severe(s"Unsupported environment (envName): $env.")
             ""
@@ -63,7 +63,7 @@ class EnvListener(env: Environment) extends Runnable {
         case _: SSHEnvironment => "SSHEnvironment"
         case _: CondorEnvironment => "CondorEnvironment"
         case _: SLURMEnvironment => "SLURMEnvironment"
-        //        case _: EGIEnvironment => "EGIEnvironment"
+        case _: EGIEnvironment => "EGIEnvironment"
         case _ =>
             L.severe(s"Unsupported environment (envKind): $env.")
             ""
@@ -79,7 +79,7 @@ class EnvListener(env: Environment) extends Runnable {
         case e: SSHEnvironment => e.nbSlots
         case e: CondorEnvironment => e.threads.getOrElse(1)
         case e: SLURMEnvironment => e.threads.getOrElse(1)
-        //        case e: EGIEnvironment => e.threads.getOrElse(1)
+        case e: EGIEnvironment => e.threads.getOrElse(1)
         case _ =>
             L.severe(s"Unsupported environment (core): $env.")
             -1
@@ -90,7 +90,7 @@ class EnvListener(env: Environment) extends Runnable {
         case e: SSHEnvironment => 0
         case e: CondorEnvironment => e.memory.getOrElse(0)
         case e: SLURMEnvironment => e.memory.getOrElse(0)
-        //        case e: EGIEnvironment => e.memory.getOrElse(0)
+        case e: EGIEnvironment => e.memory.getOrElse(0)
         case _ =>
             L.severe(s"Unsupported environment (memory): $env.")
             -1
