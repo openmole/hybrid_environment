@@ -14,8 +14,11 @@ OsgiKeys.importPackage := Seq("*")
 
 OsgiKeys.privatePackage := Seq("")
 
-resolvers += 
-  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+resolvers ++= 
+  Seq(
+    "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+    "ISC-PIF" at "http://maven.iscpif.fr/public/"
+  )
 
 val openMOLEVersion = "5.0-SNAPSHOT"
 
