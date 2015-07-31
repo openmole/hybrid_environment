@@ -114,7 +114,8 @@ class EnvListener(env: Environment) extends Runnable {
                 Listener.jobCSV(shortId(job))
                 // Listener.printJob(shortId(job))
                 delete(job)
-            case (_, JobStateChanged(job, FAILED, _)) =>
+            case (_, JobStateChanged(job, FAILED, os)) =>
+                processNewState(job, FAILED, os)
                 failedTimings(job)
                 Listener.put(shortId(job), "failed", true)
                 Listener.jobCSV(shortId(job))
@@ -161,6 +162,8 @@ class EnvListener(env: Environment) extends Runnable {
         Listener.put(id, "env_kind", env_kind)
         Listener.put(id, "core", core)
         Listener.put(id, "memory", memory)
+
+        Listener.put(id, "group", job.moleJobs.size)
 
         val t = Calendar.getInstance.getTime
         for ((dateFormat, name) <- EnvListener.date_list) {

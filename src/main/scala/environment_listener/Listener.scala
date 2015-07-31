@@ -137,7 +137,7 @@ object Listener extends Logger {
         file.withWriter(true) { writer =>
             for (metric: String <- metrics) {
                 writer.append(data_store(job_id)(ctx)(metric).toString)
-                writer.append(", ")
+                writer.append(",")
             }
             writer.append("\n")
         }
@@ -167,7 +167,7 @@ object Listener extends Logger {
             for (metric: String <- metrics) {
                 println(metric)
                 writer.append(metric)
-                writer.append(", ")
+                writer.append(",")
             }
             writer.append("\n")
         }
