@@ -3,18 +3,26 @@ package environment_listener
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
-import org.openmole.core.batch.environment.BatchEnvironment
+import org.openmole.core.batch.environment.{ SimpleBatchEnvironment, BatchEnvironment }
 import org.openmole.core.workflow.job.Job
 
 import org.openmole.tool.file._
 
 import scala.concurrent.stm._
 
+import predictron.{ PredictStrategy, AvgStrat }
+
 object Listener extends Logger {
     private val env_list = mutable.MutableList[Environment]()
     private val data_store = TMap[Job, TMap[String, Any]]()
     private var metrics: mutable.MutableList[String] = null
     var csv_path: String = "/tmp/openmole.csv"
+
+    private type t_callback = (Seq[(SimpleBatchEnvironment, Long)] => Unit)
+    private var callback: t_callback = null
+    private val completedJob = mutable.MutableList[Job]()
+    private val callThreshold = 10
+    private var strat: PredictStrategy = null
 
     /**
      * Register a new environment that will be listened to
@@ -68,7 +76,18 @@ object Listener extends Logger {
         data_store(job)(ctx)(m) = v
     }
 
-    // TODO Create class for IO
+    /**
+     * Increment the counter of completed jobs.
+     * Should be called only for completed jobs, not failed ones.
+     */
+    def completeJob(job: Job) = atomic { implicit ctx =>
+        completedJob += job
+
+        if (completedJob.size == callThreshold && callback != null) {
+            predictAndCall()
+        }
+    }
+
     /**
      * Will print all the data contained in the data_store
      * Should be replaced by a function writing everything in a file
@@ -189,5 +208,31 @@ object Listener extends Logger {
         metrics ++= List("waitingTime", "execTime", "totalTime", "failed", "uploadTime").filterNot(metrics.contains)
 
         metrics = metrics.sorted
+    }
+
+    /**
+     * The callback function will be called (if defined) when the Listener got enough data to predict execution time
+     * @param fct The function to be called.
+     */
+    def register_callback(fct: t_callback) = {
+        callback = fct
+    }
+
+    /**
+     * Will predict the times, and then call the callback, giving it the predictions as parameters.
+     */
+    private def predictAndCall() = {
+        val data = genDataPredict()
+
+        strat = new AvgStrat
+
+        val predictions = strat.predict(data)
+
+        callback(predictions)
+    }
+
+    private def genDataPredict(): Map[Job, Map[String, Any]] = atomic { implicit ctx =>
+        null
+        //        data_store.filter(j => completedJob.contains(j))
     }
 }

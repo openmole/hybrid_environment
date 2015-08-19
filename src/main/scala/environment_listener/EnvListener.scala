@@ -119,6 +119,7 @@ class EnvListener(env: Environment) extends Runnable {
                 Listener.put(jobJob(job), "failed", false)
                 //                Listener.printJob(shortId(job))
                 Listener.jobCSV(jobJob(job))
+                Listener.completeJob(jobJob(job))
                 delete(job)
             case (_, JobStateChanged(job, FAILED, os)) =>
                 processNewState(job, FAILED, os)

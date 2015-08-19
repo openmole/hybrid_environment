@@ -21,6 +21,8 @@ import org.openmole.core.batch.environment.{ SimpleBatchEnvironment }
 import org.openmole.core.workflow.job.Job
 import org.openmole.core.workspace.AuthenticationProvider
 
+import environment_listener.Listener
+
 object HybridEnvironment {
 
     def apply(
@@ -46,7 +48,7 @@ class HybridEnvironment(
     override def submit(job: Job) = {
         environmentsList.foreach(e => e._1.submit(job))
 
-        this.batchJobWatcher.registry.allJobs.filter(!_.finished)
+        Listener.register_callback(callback)
     }
 
     override def storage: SS = {
@@ -57,5 +59,19 @@ class HybridEnvironment(
     override def jobService: JS = {
         println(s"Shouldn't be there: Hybrid job service")
         environmentsList.head._1.jobService.asInstanceOf[JS]
+    }
+
+    /**
+     * Function called by the Listener singleton when it got enough data to generate accurate predictions
+     * @param env_pred The list of the predictions
+     */
+    def callback(env_pred: Seq[(SimpleBatchEnvironment, Long)]) = {
+        // Times have already been predicted
+
+        // Will now find the best "ratio" to schedule the jobs
+        // ex: 0.5 on env1, 0.2 on env2, 0.3 on env3
+
+        // Kill the duplicates
+        null
     }
 }
