@@ -2,18 +2,21 @@ package environment_listener
 
 import java.text.SimpleDateFormat
 import java.util.Calendar
+
 import scala.collection.mutable
+
+import org.openmole.core.event._
 
 import org.openmole.core.workflow.execution.{ ExecutionJob, Environment }
 import org.openmole.core.workflow.execution.ExecutionState.{ ExecutionState, SUBMITTED, READY, DONE, KILLED, FAILED, RUNNING }
 import org.openmole.core.workflow.execution.Environment.JobStateChanged
+import org.openmole.core.workflow.job.Job
+import org.openmole.core.batch.environment.BatchExecutionJob
 
 import org.openmole.plugin.environment.slurm.SLURMEnvironment
 import org.openmole.plugin.environment.ssh.SSHEnvironment
 import org.openmole.plugin.environment.condor.CondorEnvironment
 import org.openmole.plugin.environment.egi.EGIEnvironment
-
-import org.openmole.core.event._
 
 object EnvListener {
     /**
@@ -31,9 +34,9 @@ object EnvListener {
 }
 
 class EnvListener(env: Environment) extends Runnable {
-    private val jobTimings = mutable.HashMap[String, mutable.HashMap[String, Long]]()
+    private val jobTimings = mutable.HashMap[Job, mutable.HashMap[String, Long]]()
 
-    private val shortId = mutable.HashMap[ExecutionJob, String]()
+    private val jobJob = mutable.HashMap[ExecutionJob, Job]()
     private val L = Listener.Log.logger
     private var n: Long = 0
 
@@ -42,6 +45,7 @@ class EnvListener(env: Environment) extends Runnable {
      * SSH => user@host
      * Condor => user@host
      * SLURM => user@host
+     * EGI => virtual organization name
      */
     private val env_name: String = env match {
         case e: SSHEnvironment => e.user ++ "@" ++ e.host
@@ -58,6 +62,7 @@ class EnvListener(env: Environment) extends Runnable {
      * SSH
      * Condor
      * SLURM
+     * EGI
      */
     private val env_kind: String = env match {
         case _: SSHEnvironment => "SSHEnvironment"
@@ -74,6 +79,7 @@ class EnvListener(env: Environment) extends Runnable {
      * SSH
      * Condor
      * SLURM
+     * EGI
      */
     private val core: Int = env match {
         case e: SSHEnvironment => e.nbSlots
@@ -110,15 +116,15 @@ class EnvListener(env: Environment) extends Runnable {
                 processNewState(job, SUBMITTED, READY)
             case (_, JobStateChanged(job, KILLED, oldState)) =>
                 putTimings(job)
-                Listener.put(shortId(job), "failed", false)
-                Listener.jobCSV(shortId(job))
-                // Listener.printJob(shortId(job))
+                Listener.put(jobJob(job), "failed", false)
+                //                Listener.printJob(shortId(job))
+                Listener.jobCSV(jobJob(job))
                 delete(job)
             case (_, JobStateChanged(job, FAILED, os)) =>
                 processNewState(job, FAILED, os)
                 failedTimings(job)
-                Listener.put(shortId(job), "failed", true)
-                Listener.jobCSV(shortId(job))
+                Listener.put(jobJob(job), "failed", true)
+                Listener.jobCSV(jobJob(job))
                 delete(job)
             case (_, JobStateChanged(job, newState, oldState)) => processNewState(job, newState, oldState)
         }
@@ -129,10 +135,11 @@ class EnvListener(env: Environment) extends Runnable {
      * @param job The job
      */
     private def create(job: ExecutionJob) = {
-        L.info(s"Catched $job.")
+        L.info(s"Catched ${job.asInstanceOf[BatchExecutionJob].job}.")
 
-        shortId(job) = genShortId(job)
-        val id = shortId(job)
+        jobJob(job) = job.asInstanceOf[BatchExecutionJob].job
+        val id = jobJob(job)
+        println(s"$job\n\t${jobJob(job)}")
 
         Listener.createJobMap(id)
         jobTimings(id) = new mutable.HashMap[String, Long]
@@ -144,9 +151,9 @@ class EnvListener(env: Environment) extends Runnable {
      * @param job The job to be deleted
      */
     private def delete(job: ExecutionJob) = {
-        jobTimings.remove(shortId(job))
+        jobTimings.remove(jobJob(job))
 
-        shortId.remove(job)
+        jobJob.remove(job)
     }
 
     /**
@@ -156,14 +163,17 @@ class EnvListener(env: Environment) extends Runnable {
      * @param job The job
      */
     private def fillInputs(job: ExecutionJob) = {
-        val id = shortId(job)
+        val id = jobJob(job)
 
         Listener.put(id, "env_name", env_name)
         Listener.put(id, "env_kind", env_kind)
         Listener.put(id, "core", core)
         Listener.put(id, "memory", memory)
 
+        Listener.put(id, "id", genShortId(job))
         Listener.put(id, "group", job.moleJobs.size)
+
+        Listener.put(id, "id", genShortId(job))
 
         val t = Calendar.getInstance.getTime
         for ((dateFormat, name) <- EnvListener.date_list) {
@@ -173,14 +183,15 @@ class EnvListener(env: Environment) extends Runnable {
 
     /**
      * Generate a shorter id for the job
+     * Cause problem with EGI, since it'll replicate the same job, which will eventually to conflict.
+     * Need to find a way to manage it efficiently
      * @param job The job
      * @return Everything at the right of the '@'
      */
     private def genShortId(job: ExecutionJob): String = {
-        val tmp = job.toString
+        val tmp = job.asInstanceOf[BatchExecutionJob].job.toString
 
-        n += 1
-        n.toString ++ "-" ++ tmp.drop(tmp.indexOf('@') + 1)
+        tmp.drop(tmp.indexOf('@') + 1)
     }
 
     /**
@@ -191,7 +202,7 @@ class EnvListener(env: Environment) extends Runnable {
     private def processNewState(job: ExecutionJob, newState: ExecutionState, oldState: ExecutionState) = {
         //        L.info(s"$job\n\t$oldState -> $newState")
 
-        jobTimings(shortId(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis / 1000
+        jobTimings(jobJob(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis / 1000
     }
 
     /**
@@ -204,7 +215,7 @@ class EnvListener(env: Environment) extends Runnable {
      * @param earlyState The oldest state.
      */
     private def putDiff(job: ExecutionJob, name: String, laterState: String, earlyState: String) = {
-        val id: String = shortId(job)
+        val id: Job = jobJob(job)
 
         var v: Long = 0
         if (jobTimings(id).contains(laterState) && jobTimings(id).contains(earlyState)) {

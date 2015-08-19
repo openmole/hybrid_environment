@@ -3,6 +3,8 @@ package environment_listener
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
+import org.openmole.core.batch.environment.BatchEnvironment
+import org.openmole.core.workflow.job.Job
 
 import org.openmole.tool.file._
 
@@ -10,7 +12,7 @@ import scala.concurrent.stm._
 
 object Listener extends Logger {
     private val env_list = mutable.MutableList[Environment]()
-    private val data_store = TMap[String, TMap[String, Any]]()
+    private val data_store = TMap[Job, TMap[String, Any]]()
     private var metrics: mutable.MutableList[String] = null
     var csv_path: String = "/tmp/openmole.csv"
 
@@ -38,31 +40,32 @@ object Listener extends Logger {
     def startMonitoring() {
         for (env <- env_list) {
             new EnvListener(env).run()
+            new BatchListener(env.asInstanceOf[BatchEnvironment]).run()
         }
     }
 
     /**
-     * Create the instance of the Tmap for the job id
-     * @param job_id The job id
+     * Create the instance of the Tmap for the job
+     * @param job The job
      */
-    def createJobMap(job_id: String) = atomic { implicit ctx =>
-        if (data_store contains job_id) {
-            Log.logger.severe(s"$job_id already created")
+    def createJobMap(job: Job) = atomic { implicit ctx =>
+        if (data_store contains job) {
+            //            Log.logger.severe(s"$job_id already created")
+        } else {
+            data_store(job) = TMap[String, Any]()
         }
-        data_store(job_id) = TMap[String, Any]()
     }
 
     /**
      * Will write a value in the data_store
      *
-     * NEEDS to be rewritten, does nothing at the moment
-     *
-     * @param job_id The job id
+     * @param job The job
      * @param m The metric name
      * @param v The actual value
      */
-    def put(job_id: String, m: String, v: Any) = atomic { implicit ctx =>
-        data_store(job_id)(ctx)(m) = v
+    def put(job: Job, m: String, v: Any) = atomic { implicit ctx =>
+        //        println(s"Put: $job_id $m = $v")
+        data_store(job)(ctx)(m) = v
     }
 
     // TODO Create class for IO
@@ -79,12 +82,12 @@ object Listener extends Logger {
 
     /**
      * Print all the informations stored about the job_id.
-     * @param job_id The job to display
+     * @param job The job to display
      */
-    def printJob(job_id: String) = atomic { implicit ctx =>
-        println(s"Job: $job_id")
-        for (metric: String <- data_store(job_id).keys) {
-            println(s"\t$metric : ${data_store(job_id)(ctx)(metric)}")
+    def printJob(job: Job) = atomic { implicit ctx =>
+        println(s"Job: $job")
+        for (metric: String <- data_store(job).keys) {
+            println(s"\t$metric : ${data_store(job)(ctx)(metric)}")
         }
     }
 
@@ -104,17 +107,17 @@ object Listener extends Logger {
             initMetrics()
         }
 
-        for (job_id: String <- data_store.keySet) {
-            writeJobCSV(job_id, file)
+        for (job: Job <- data_store.keySet) {
+            writeJobCSV(job, file)
         }
     }
 
     /**
      * Write all the measurements of the job to the given csv file.
-     * @param job_id The job to be written.
+     * @param job The job to be written.
      */
-    def jobCSV(job_id: String) {
-        Log.logger.info(s"Writing job $job_id measurements to $csv_path.")
+    def jobCSV(job: Job) {
+        Log.logger.info(s"Writing job $job measurements to $csv_path.")
         val file: File = new File(csv_path)
 
         if (!file.exists()) {
@@ -123,20 +126,20 @@ object Listener extends Logger {
             initMetrics()
         }
 
-        writeJobCSV(job_id, file)
+        writeJobCSV(job, file)
     }
 
     /**
      * Actually write the job_id measures in the file.
      * The file _must_ be created before.
-     * @param job_id The job to be written.
+     * @param job The job to be written.
      * @param file The destination file.
      */
-    private def writeJobCSV(job_id: String, file: File) = atomic { implicit ctx =>
+    private def writeJobCSV(job: Job, file: File) = atomic { implicit ctx =>
 
         file.withWriter(true) { writer =>
             for (metric: String <- metrics) {
-                writer.append(data_store(job_id)(ctx)(metric).toString)
+                writer.append(data_store(job)(ctx)(metric).toString)
                 writer.append(",")
             }
             writer.append("\n")
@@ -183,8 +186,8 @@ object Listener extends Logger {
         metrics ++= data_store(data_store.keySet.head).keys.toList
 
         // Not great but avoid hardcoding the whole list
-        metrics ++= List("waitingTime", "execTime", "totalTime", "failed").filterNot(metrics.contains)
+        metrics ++= List("waitingTime", "execTime", "totalTime", "failed", "uploadTime").filterNot(metrics.contains)
 
-        metrics.sorted
+        metrics = metrics.sorted
     }
 }
