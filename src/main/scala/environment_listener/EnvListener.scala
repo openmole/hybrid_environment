@@ -11,7 +11,7 @@ import org.openmole.core.workflow.execution.{ ExecutionJob, Environment }
 import org.openmole.core.workflow.execution.ExecutionState.{ ExecutionState, SUBMITTED, READY, DONE, KILLED, FAILED, RUNNING }
 import org.openmole.core.workflow.execution.Environment.JobStateChanged
 import org.openmole.core.workflow.job.Job
-import org.openmole.core.batch.environment.BatchExecutionJob
+import org.openmole.core.batch.environment.{SimpleBatchEnvironment, BatchExecutionJob}
 
 import org.openmole.plugin.environment.slurm.SLURMEnvironment
 import org.openmole.plugin.environment.ssh.SSHEnvironment
@@ -168,6 +168,7 @@ class EnvListener(env: Environment) extends Runnable {
 
         Listener.put(id, "env_name", env_name)
         Listener.put(id, "env_kind", env_kind)
+        Listener.put(id, "senv", env.asInstanceOf[SimpleBatchEnvironment])
         Listener.put(id, "core", core)
         Listener.put(id, "memory", memory)
 

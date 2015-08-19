@@ -8,7 +8,7 @@ scalaVersion := "2.11.7"
 
 osgiSettings
 
-OsgiKeys.exportPackage := Seq("environment_listener.*", "hybrid.*")
+OsgiKeys.exportPackage := Seq("environment_listener.*", "hybrid.*", "predictron.*")
 
 OsgiKeys.importPackage := Seq("*")
 

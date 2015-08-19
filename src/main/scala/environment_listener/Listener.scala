@@ -18,7 +18,7 @@ object Listener extends Logger {
     private var metrics: mutable.MutableList[String] = null
     var csv_path: String = "/tmp/openmole.csv"
 
-    private type t_callback = (Seq[(SimpleBatchEnvironment, Long)] => Unit)
+    private type t_callback = (List[(SimpleBatchEnvironment, Double)] => Unit)
     private var callback: t_callback = null
     private val completedJob = mutable.MutableList[Job]()
     private val callThreshold = 10
@@ -226,13 +226,17 @@ object Listener extends Logger {
 
         strat = new AvgStrat
 
-        val predictions = strat.predict(data)
+        val el = env_list.toList.map(e => e.asInstanceOf[SimpleBatchEnvironment])
+        val predictions = strat.predict(data, el)
 
         callback(predictions)
     }
 
     private def genDataPredict(): Map[Job, Map[String, Any]] = atomic { implicit ctx =>
-        null
-        //        data_store.filter(j => completedJob.contains(j))
+        //        var res = Map[Job, Map[String, Any]]()
+
+        //        val df = data_store.filter(j => completedJob.contains(j)).mapValues(m => m.toMap).toMap
+
+        data_store.filter(j => completedJob.contains(j)).mapValues(m => m.toMap).toMap
     }
 }
