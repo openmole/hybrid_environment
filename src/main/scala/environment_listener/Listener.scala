@@ -232,6 +232,11 @@ object Listener extends Logger {
         callback(predictions)
     }
 
+    /**
+     * Change the data_structure for the prediction module
+     * From Tmap to map
+     * @return The new data structure
+     */
     private def genDataPredict(): Map[Job, Map[String, Any]] = atomic { implicit ctx =>
         //        var res = Map[Job, Map[String, Any]]()
 

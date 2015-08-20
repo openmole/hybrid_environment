@@ -17,7 +17,7 @@
 
 package hybrid
 
-import org.openmole.core.batch.environment.{BatchEnvironment, SimpleBatchEnvironment }
+import org.openmole.core.batch.environment.{ BatchEnvironment, SimpleBatchEnvironment }
 import org.openmole.core.workflow.job.Job
 import org.openmole.core.workspace.AuthenticationProvider
 
@@ -37,10 +37,12 @@ class HybridEnvironment(
         val environmentsList: Seq[(SimpleBatchEnvironment, Option[Double])],
         override val name: Option[String] = None)(implicit authentications: AuthenticationProvider) extends SimpleBatchEnvironment { env ⇒
 
+    environmentsList.map(_._1).foreach(Listener.registerEnvironment)
+//    Listener.register_callback(callback)
+    Listener.startMonitoring()
+
     override def submit(job: Job) = {
         environmentsList.foreach(e => e._1.submit(job))
-
-        Listener.register_callback(callback)
     }
 
     override def storage: SS = {
@@ -65,13 +67,13 @@ class HybridEnvironment(
         // ex: 0.5 on env1, 0.2 on env2, 0.3 on env3
         val s = env_pred.map(_._2).sum
         val r = unfinishedJobs.size
-        val env_r = env_pred.map(x => (x._1, (r*(1 - x._2/s)).toInt))
+        val env_r = env_pred.map(x => (x._1, (r * (1 - x._2 / s)).toInt))
 
         // Kill the duplicates
         var i = 0
         var t = 0
-        for(j <- unfinishedJobs){
-            if(t > env_r(i)._2){
+        for (j <- unfinishedJobs) {
+            if (t > env_r(i)._2) {
                 i += 1
             }
 
@@ -86,10 +88,10 @@ class HybridEnvironment(
      * @param job The job concerned
      * @param env The environment to keep
      */
-    private def killExcept(job : Job, env : SimpleBatchEnvironment) = {
+    private def killExcept(job: Job, env: SimpleBatchEnvironment) = {
         batchJobWatcher.registry
-                .executionJobs(job)
-                .filter(bej => bej.environment.asInstanceOf[SimpleBatchEnvironment] != env)
-                .foreach(BatchEnvironment.jobManager.killAndClean)
+            .executionJobs(job)
+            .filter(bej => bej.environment.asInstanceOf[SimpleBatchEnvironment] != env)
+            .foreach(BatchEnvironment.jobManager.killAndClean)
     }
 }
