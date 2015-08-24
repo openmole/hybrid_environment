@@ -38,7 +38,7 @@ class HybridEnvironment(
         override val name: Option[String] = None)(implicit authentications: AuthenticationProvider) extends SimpleBatchEnvironment { env ⇒
 
     environmentsList.map(_._1).foreach(Listener.registerEnvironment)
-//    Listener.register_callback(callback)
+    Listener.registerCallback(callback)
     Listener.startMonitoring()
 
     override def submit(job: Job) = {
@@ -61,13 +61,17 @@ class HybridEnvironment(
      * @param env_pred The list of the predictions
      */
     def callback(env_pred: List[(SimpleBatchEnvironment, Double)]) = {
+        println("Called back")
+        env_pred.foreach(println)
         val unfinishedJobs = batchJobWatcher.registry.allJobs.filter(!_.finished)
 
         // Will now find the best "ratio" to schedule the jobs
         // ex: 0.5 on env1, 0.2 on env2, 0.3 on env3
-        val s = env_pred.map(_._2).sum
-        val r = unfinishedJobs.size
-        val env_r = env_pred.map(x => (x._1, (r * (1 - x._2 / s)).toInt))
+        val s: Double = env_pred.map(_._2).sum
+        val r: Long = unfinishedJobs.size
+        val env_r = env_pred.map(x => (x._1, (r * (1 - x._2 / s)).toLong))
+
+        env_pred.foreach(println)
 
         // Kill the duplicates
         var i = 0

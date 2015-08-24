@@ -23,12 +23,12 @@ class BatchListener(env: BatchEnvironment) extends Runnable {
     def run(): Unit = {
         env listen {
             case (_, BeginUpload(id, file, path, storage, job)) =>
-                println(s"$n Begin upload on $job with id $id")
+                //                println(s"$n Begin upload on $job with id $id")
                 n += 1
                 Listener.createJobMap(job)
                 timingList(job) = Calendar.getInstance().getTimeInMillis
             case (_, EndUpload(id, file, path, storage, job, exception)) =>
-                println(s"Ended upload on $job with id $id")
+                //                println(s"Ended upload on $job with id $id")
                 Listener.put(job,
                     "uploadTime",
                     Calendar.getInstance().getTimeInMillis - timingList(job))

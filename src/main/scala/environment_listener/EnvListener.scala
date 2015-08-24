@@ -119,7 +119,7 @@ class EnvListener(env: Environment) extends Runnable {
                 Listener.put(jobJob(job), "failed", false)
                 //                Listener.printJob(shortId(job))
                 Listener.jobCSV(jobJob(job))
-                Listener.completeJob(jobJob(job))
+                Listener.completeJob(jobJob(job), env)
                 delete(job)
             case (_, JobStateChanged(job, FAILED, os)) =>
                 processNewState(job, FAILED, os)
@@ -136,11 +136,11 @@ class EnvListener(env: Environment) extends Runnable {
      * @param job The job
      */
     private def create(job: ExecutionJob) = {
-        L.info(s"Catched ${job.asInstanceOf[BatchExecutionJob].job}.")
+        //        L.info(s"Catched ${job.asInstanceOf[BatchExecutionJob].job}.")
 
         jobJob(job) = job.asInstanceOf[BatchExecutionJob].job
         val id = jobJob(job)
-        println(s"$job\n\t${jobJob(job)}")
+        //        println(s"$job\n\t${jobJob(job)}")
 
         Listener.createJobMap(id)
         jobTimings(id) = new mutable.HashMap[String, Long]

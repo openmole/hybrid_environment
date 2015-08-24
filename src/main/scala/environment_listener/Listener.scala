@@ -19,10 +19,11 @@ object Listener extends Logger {
     var csv_path: String = "/tmp/openmole.csv"
 
     private type t_callback = (List[(SimpleBatchEnvironment, Double)] => Unit)
-    private var callback: t_callback = null
+    private var callback: t_callback = null // Init by registerCallback, reset by predictAndCall
     private val completedJob = mutable.MutableList[Job]()
-    private val callThreshold = 10
-    private var strat: PredictStrategy = null
+    private val cJobPerEnv = TMap[Environment, Long]()
+    private val callThreshold: Long = 2
+    private var strat: PredictStrategy = null // Is initialized in predictAndCall
 
     /**
      * Register a new environment that will be listened to
@@ -49,6 +50,10 @@ object Listener extends Logger {
         for (env <- env_list) {
             new EnvListener(env).run()
             new BatchListener(env.asInstanceOf[BatchEnvironment]).run()
+
+            atomic { implicit ctx =>
+                cJobPerEnv(env) = 0
+            }
         }
     }
 
@@ -77,14 +82,35 @@ object Listener extends Logger {
     }
 
     /**
-     * Increment the counter of completed jobs.
-     * Should be called only for completed jobs, not failed ones.
+     * Add the job to the list of completed job.
+     * Update the counter of completed job per environment
+     * Once each environment has enough completed jobs (according to the callThreshold val), will call
+     * predictAndCall
+     * @see callThreshold
+     * @see predictAndWall
+     * @param job The job completed
+     * @param env The environment where is happened
      */
-    def completeJob(job: Job) = atomic { implicit ctx =>
-        completedJob += job
+    def completeJob(job: Job, env: Environment) = {
+        var b = false
+        atomic { implicit ctx =>
+            if (!data_store.contains(job)) {
+                println("Wut: $job not in data store")
+            }
 
-        if (completedJob.size == callThreshold && callback != null) {
-            predictAndCall()
+            completedJob += job
+            cJobPerEnv(env) = cJobPerEnv(env) + 1
+            b = cJobPerEnv.count(_._2 > callThreshold) == env_list.size
+        }
+
+        this.synchronized {
+            if (callback != null && b) {
+                println("Will callback")
+                atomic { implicit ctx =>
+                    cJobPerEnv.foreach(println)
+                }
+                predictAndCall()
+            }
         }
     }
 
@@ -136,7 +162,7 @@ object Listener extends Logger {
      * @param job The job to be written.
      */
     def jobCSV(job: Job) {
-        Log.logger.info(s"Writing job $job measurements to $csv_path.")
+        //        Log.logger.info(s"Writing job $job measurements to $csv_path.")
         val file: File = new File(csv_path)
 
         if (!file.exists()) {
@@ -214,22 +240,28 @@ object Listener extends Logger {
      * The callback function will be called (if defined) when the Listener got enough data to predict execution time
      * @param fct The function to be called.
      */
-    def register_callback(fct: t_callback) = {
+    def registerCallback(fct: t_callback) = {
         callback = fct
     }
 
     /**
      * Will predict the times, and then call the callback, giving it the predictions as parameters.
+     * callback will be reset (null) at the end of the function.
      */
     private def predictAndCall() = {
+        val tmp_c = callback
+        callback = null
+
+        println(s"Size job completed ${completedJob.size}")
         val data = genDataPredict()
+        println(s"Size data predict: ${data.keySet.size}")
 
         strat = new AvgStrat
 
         val el = env_list.toList.map(e => e.asInstanceOf[SimpleBatchEnvironment])
         val predictions = strat.predict(data, el)
 
-        callback(predictions)
+        tmp_c(predictions)
     }
 
     /**
@@ -238,10 +270,15 @@ object Listener extends Logger {
      * @return The new data structure
      */
     private def genDataPredict(): Map[Job, Map[String, Any]] = atomic { implicit ctx =>
-        //        var res = Map[Job, Map[String, Any]]()
-
-        //        val df = data_store.filter(j => completedJob.contains(j)).mapValues(m => m.toMap).toMap
-
-        data_store.filter(j => completedJob.contains(j)).mapValues(m => m.toMap).toMap
+        //        println(data_store.filter(j => completedJob.contains(j._1)).size)
+        //        println(data_store.size)
+        completedJob.foreach(println)
+        println("--")
+        val tmp = data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
+        tmp.keySet.foreach(println)
+        println("--")
+        data_store.keySet.foreach(println)
+        tmp
+        // data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
     }
 }
