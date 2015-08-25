@@ -17,9 +17,13 @@
 
 package hybrid
 
-import org.openmole.core.batch.environment.{ BatchEnvironment, SimpleBatchEnvironment }
+import org.openmole.core.batch.environment.{ SimpleBatchExecutionJob, BatchEnvironment, SimpleBatchEnvironment }
+import org.openmole.core.batch.environment.BatchEnvironment.jobManager
+import org.openmole.core.batch.refresh.{ JobManager, Manage }
+import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.workflow.job.Job
 import org.openmole.core.workspace.AuthenticationProvider
+import org.openmole.core.event.EventDispatcher
 
 import environment_listener.Listener
 
@@ -42,7 +46,21 @@ class HybridEnvironment(
     Listener.startMonitoring()
 
     override def submit(job: Job) = {
-        environmentsList.foreach(e => e._1.submit(job))
+        /*for(env <- environmentsList.map(_._1)){
+            val bej = new BEJ(job, env)
+            EventDispatcher.trigger(env, new Environment.JobSubmitted(bej))
+            batchJobWatcher.register(bej)
+            jobManager ! Manage(bej)
+        }*/
+        //        environmentsList.foreach(e => e._1.submit(job))
+        environmentsList.map(_._1).foreach(submit(job, _))
+    }
+
+    def submit(job: Job, env: SimpleBatchEnvironment) = {
+        val bej = new BEJ(job, env)
+        EventDispatcher.trigger(env, new Environment.JobSubmitted(bej))
+        batchJobWatcher.register(bej)
+        jobManager ! Manage(bej)
     }
 
     override def storage: SS = {
@@ -63,15 +81,24 @@ class HybridEnvironment(
     def callback(env_pred: List[(SimpleBatchEnvironment, Double)]) = {
         println("Called back")
         env_pred.foreach(println)
+
+        // Unfinished : need to see for each environment
+        // Use a set ?
+
+        println(environmentsList.head._1.batchJobWatcher.registry.allJobs.size)
+        println(batchJobWatcher.registry.allJobs.size)
+        println(batchJobWatcher.registry.allJobs.filter(_.finished).size)
         val unfinishedJobs = batchJobWatcher.registry.allJobs.filter(!_.finished)
 
         // Will now find the best "ratio" to schedule the jobs
         // ex: 0.5 on env1, 0.2 on env2, 0.3 on env3
         val s: Double = env_pred.map(_._2).sum
         val r: Long = unfinishedJobs.size
+        println(s)
+        println(r)
         val env_r = env_pred.map(x => (x._1, (r * (1 - x._2 / s)).toLong))
 
-        env_pred.foreach(println)
+        env_r.foreach(println)
 
         // Kill the duplicates
         var i = 0
@@ -79,6 +106,7 @@ class HybridEnvironment(
         for (j <- unfinishedJobs) {
             if (t > env_r(i)._2) {
                 i += 1
+                t = 0
             }
 
             killExcept(j, env_r(i)._1)
@@ -93,9 +121,15 @@ class HybridEnvironment(
      * @param env The environment to keep
      */
     private def killExcept(job: Job, env: SimpleBatchEnvironment) = {
+        println(s"${
+            batchJobWatcher.registry
+                .executionJobs(job)
+                .filter(bej => bej.environment.asInstanceOf[SimpleBatchEnvironment] != env).size
+        } to kill")
+
         batchJobWatcher.registry
             .executionJobs(job)
             .filter(bej => bej.environment.asInstanceOf[SimpleBatchEnvironment] != env)
-            .foreach(BatchEnvironment.jobManager.killAndClean)
+            .foreach(jobManager.killAndClean)
     }
 }

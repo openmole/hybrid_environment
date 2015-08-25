@@ -14,13 +14,13 @@ import predictron.{ PredictStrategy, AvgStrat }
 
 object Listener extends Logger {
     private val env_list = mutable.MutableList[Environment]()
-    private val data_store = TMap[Job, TMap[String, Any]]()
+    private val data_store = TMap[(Job, Environment), TMap[String, Any]]()
     private var metrics: mutable.MutableList[String] = null
     var csv_path: String = "/tmp/openmole.csv"
 
     private type t_callback = (List[(SimpleBatchEnvironment, Double)] => Unit)
     private var callback: t_callback = null // Init by registerCallback, reset by predictAndCall
-    private val completedJob = mutable.MutableList[Job]()
+    private val completedJob = mutable.MutableList[(Job, Environment)]()
     private val cJobPerEnv = TMap[Environment, Long]()
     private val callThreshold: Long = 2
     private var strat: PredictStrategy = null // Is initialized in predictAndCall
@@ -61,11 +61,11 @@ object Listener extends Logger {
      * Create the instance of the Tmap for the job
      * @param job The job
      */
-    def createJobMap(job: Job) = atomic { implicit ctx =>
+    def createJobMap(job: Job, env: Environment) = atomic { implicit ctx =>
         if (data_store contains job) {
             //            Log.logger.severe(s"$job_id already created")
         } else {
-            data_store(job) = TMap[String, Any]()
+            data_store((job, env)) = TMap[String, Any]()
         }
     }
 
@@ -76,9 +76,9 @@ object Listener extends Logger {
      * @param m The metric name
      * @param v The actual value
      */
-    def put(job: Job, m: String, v: Any) = atomic { implicit ctx =>
+    def put(job: Job, env: Environment, m: String, v: Any) = atomic { implicit ctx =>
         //        println(s"Put: $job_id $m = $v")
-        data_store(job)(ctx)(m) = v
+        data_store((job, env))(ctx)(m) = v
     }
 
     /**
@@ -91,25 +91,23 @@ object Listener extends Logger {
      * @param job The job completed
      * @param env The environment where is happened
      */
-    def completeJob(job: Job, env: Environment) = {
-        var b = false
-        atomic { implicit ctx =>
-            if (!data_store.contains(job)) {
+    def completeJob(job: Job, env: Environment) = atomic { implicit ctx =>
+        if (callback != null) {
+            if (!data_store.keySet.map(_._1).contains(job)) {
                 println("Wut: $job not in data store")
             }
 
-            completedJob += job
-            cJobPerEnv(env) = cJobPerEnv(env) + 1
-            b = cJobPerEnv.count(_._2 > callThreshold) == env_list.size
-        }
+            if (!completedJob.map(_._1).contains(job)) {
+                completedJob += ((job, env))
+                cJobPerEnv(env) = cJobPerEnv(env) + 1
 
-        this.synchronized {
-            if (callback != null && b) {
-                println("Will callback")
-                atomic { implicit ctx =>
-                    cJobPerEnv.foreach(println)
+                if (cJobPerEnv.forall(_._2 > callThreshold)) {
+                    println("Will callback")
+                    atomic { implicit ctx =>
+                        cJobPerEnv.foreach(println)
+                    }
+                    predictAndCall()
                 }
-                predictAndCall()
             }
         }
     }
@@ -127,12 +125,12 @@ object Listener extends Logger {
 
     /**
      * Print all the informations stored about the job_id.
-     * @param job The job to display
+     * @param je The job to display
      */
-    def printJob(job: Job) = atomic { implicit ctx =>
-        println(s"Job: $job")
-        for (metric: String <- data_store(job).keys) {
-            println(s"\t$metric : ${data_store(job)(ctx)(metric)}")
+    def printJob(je: (Job, Environment)) = atomic { implicit ctx =>
+        println(s"Job: ${je._1}")
+        for (metric: String <- data_store(je).keys) {
+            println(s"\t$metric : ${data_store(je)(ctx)(metric)}")
         }
     }
 
@@ -152,8 +150,8 @@ object Listener extends Logger {
             initMetrics()
         }
 
-        for (job: Job <- data_store.keySet) {
-            writeJobCSV(job, file)
+        for (je: (Job, Environment) <- data_store.keySet) {
+            writeJobCSV(je, file)
         }
     }
 
@@ -161,7 +159,7 @@ object Listener extends Logger {
      * Write all the measurements of the job to the given csv file.
      * @param job The job to be written.
      */
-    def jobCSV(job: Job) {
+    def jobCSV(job: Job, env: Environment) {
         //        Log.logger.info(s"Writing job $job measurements to $csv_path.")
         val file: File = new File(csv_path)
 
@@ -171,20 +169,20 @@ object Listener extends Logger {
             initMetrics()
         }
 
-        writeJobCSV(job, file)
+        writeJobCSV((job, env), file)
     }
 
     /**
      * Actually write the job_id measures in the file.
      * The file _must_ be created before.
-     * @param job The job to be written.
+     * @param je The job to be written.
      * @param file The destination file.
      */
-    private def writeJobCSV(job: Job, file: File) = atomic { implicit ctx =>
+    private def writeJobCSV(je: (Job, Environment), file: File) = atomic { implicit ctx =>
 
         file.withWriter(true) { writer =>
             for (metric: String <- metrics) {
-                writer.append(data_store(job)(ctx)(metric).toString)
+                writer.append(data_store(je)(ctx)(metric).toString)
                 writer.append(",")
             }
             writer.append("\n")
@@ -231,7 +229,7 @@ object Listener extends Logger {
         metrics ++= data_store(data_store.keySet.head).keys.toList
 
         // Not great but avoid hardcoding the whole list
-        metrics ++= List("waitingTime", "execTime", "totalTime", "failed", "uploadTime").filterNot(metrics.contains)
+        metrics ++= List("waitingTime", "execTime", "totalTime", "failed").filterNot(metrics.contains)
 
         metrics = metrics.sorted
     }
@@ -269,15 +267,14 @@ object Listener extends Logger {
      * From Tmap to map
      * @return The new data structure
      */
-    private def genDataPredict(): Map[Job, Map[String, Any]] = atomic { implicit ctx =>
-        //        println(data_store.filter(j => completedJob.contains(j._1)).size)
-        //        println(data_store.size)
-        completedJob.foreach(println)
-        println("--")
+    private def genDataPredict(): Map[(Job, Environment), Map[String, Any]] = atomic { implicit ctx =>
+
+        //        completedJob.foreach(println)
+        //        println("--")
         val tmp = data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
-        tmp.keySet.foreach(println)
-        println("--")
-        data_store.keySet.foreach(println)
+        //        tmp.keySet.foreach(println)
+        //        println("--")
+        //        data_store.keySet.foreach(println)
         tmp
         // data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
     }

@@ -116,16 +116,16 @@ class EnvListener(env: Environment) extends Runnable {
                 processNewState(job, SUBMITTED, READY)
             case (_, JobStateChanged(job, KILLED, oldState)) =>
                 putTimings(job)
-                Listener.put(jobJob(job), "failed", false)
+                Listener.put(jobJob(job), env, "failed", false)
                 //                Listener.printJob(shortId(job))
-                Listener.jobCSV(jobJob(job))
+                Listener.jobCSV(jobJob(job), env)
                 Listener.completeJob(jobJob(job), env)
                 delete(job)
             case (_, JobStateChanged(job, FAILED, os)) =>
                 processNewState(job, FAILED, os)
                 failedTimings(job)
-                Listener.put(jobJob(job), "failed", true)
-                Listener.jobCSV(jobJob(job))
+                Listener.put(jobJob(job), env, "failed", true)
+                Listener.jobCSV(jobJob(job), env)
                 delete(job)
             case (_, JobStateChanged(job, newState, oldState)) => processNewState(job, newState, oldState)
         }
@@ -136,13 +136,13 @@ class EnvListener(env: Environment) extends Runnable {
      * @param job The job
      */
     private def create(job: ExecutionJob) = {
-        //        L.info(s"Catched ${job.asInstanceOf[BatchExecutionJob].job}.")
+        L.info(s"Catched ${job.asInstanceOf[BatchExecutionJob].job}.")
 
         jobJob(job) = job.asInstanceOf[BatchExecutionJob].job
         val id = jobJob(job)
         //        println(s"$job\n\t${jobJob(job)}")
 
-        Listener.createJobMap(id)
+        Listener.createJobMap(id, env)
         jobTimings(id) = new mutable.HashMap[String, Long]
     }
 
@@ -166,20 +166,20 @@ class EnvListener(env: Environment) extends Runnable {
     private def fillInputs(job: ExecutionJob) = {
         val id = jobJob(job)
 
-        Listener.put(id, "env_name", env_name)
-        Listener.put(id, "env_kind", env_kind)
-        Listener.put(id, "senv", env.asInstanceOf[SimpleBatchEnvironment])
-        Listener.put(id, "core", core)
-        Listener.put(id, "memory", memory)
+        Listener.put(id, env, "env_name", env_name)
+        Listener.put(id, env, "env_kind", env_kind)
+        Listener.put(id, env, "senv", env.asInstanceOf[SimpleBatchEnvironment])
+        Listener.put(id, env, "core", core)
+        Listener.put(id, env, "memory", memory)
 
-        Listener.put(id, "id", genShortId(job))
-        Listener.put(id, "group", job.moleJobs.size)
+        Listener.put(id, env, "id", genShortId(job))
+        Listener.put(id, env, "group", job.moleJobs.size)
 
-        Listener.put(id, "id", genShortId(job))
+        Listener.put(id, env, "id", genShortId(job))
 
         val t = Calendar.getInstance.getTime
         for ((dateFormat, name) <- EnvListener.date_list) {
-            Listener.put(id, name, dateFormat.format(t))
+            Listener.put(id, env, name, dateFormat.format(t))
         }
     }
 
@@ -219,12 +219,12 @@ class EnvListener(env: Environment) extends Runnable {
     private def putDiff(job: ExecutionJob, name: String, laterState: String, earlyState: String) = {
         val id: Job = jobJob(job)
 
-        var v: Long = 0
+        var v: Long = -1
         if (jobTimings(id).contains(laterState) && jobTimings(id).contains(earlyState)) {
             v = jobTimings(id)(laterState) - jobTimings(id)(earlyState)
         }
 
-        Listener.put(id, name, v)
+        Listener.put(id, env, name, v)
     }
 
     /**
