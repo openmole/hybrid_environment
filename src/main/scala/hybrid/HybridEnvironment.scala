@@ -17,6 +17,8 @@
 
 package hybrid
 
+import scala.util.Random
+
 import org.openmole.core.batch.environment.{ SimpleBatchExecutionJob, BatchEnvironment, SimpleBatchEnvironment }
 import org.openmole.core.batch.environment.BatchEnvironment.jobManager
 import org.openmole.core.batch.refresh.{ JobManager, Manage }
@@ -41,21 +43,24 @@ class HybridEnvironment(
         val environmentsList: Seq[SimpleBatchEnvironment],
         override val name: Option[String] = None)(implicit authentications: AuthenticationProvider) extends SimpleBatchEnvironment { env ⇒
 
+    val rng: (Int => Int) = new Random().nextInt
+    val es = environmentsList.size
+
     /**
      * Register each environment to the Listener, and start the monitoring
      * Also register the callback function. Comment to deactivate
      */
     environmentsList.foreach(Listener.registerEnvironment)
-    Listener.registerCallback(callback)
+    //    Listener.registerCallback(callback)
     Listener.startMonitoring()
 
     /**
-     * Submit the job to each environment registered
+     * Submit the job to a random environment, with a uniform distribution
      * @param job The job to submit
      * @see submit(Job, SimpleBatchEnvironment)
      */
     override def submit(job: Job) = {
-        environmentsList.foreach(submit(job, _))
+        submit(job, environmentsList(rng(es)))
     }
 
     /**
