@@ -41,21 +41,30 @@ class HybridEnvironment(
         val environmentsList: Seq[(SimpleBatchEnvironment, Option[Double])],
         override val name: Option[String] = None)(implicit authentications: AuthenticationProvider) extends SimpleBatchEnvironment { env ⇒
 
+    /**
+     * Register each environment to the Listener, and start the monitoring
+     * Also register the callback function. Comment to deactivate
+     */
     environmentsList.map(_._1).foreach(Listener.registerEnvironment)
     Listener.registerCallback(callback)
     Listener.startMonitoring()
 
+    /**
+     * Submit the job to each environment registered
+     * @param job The job to submit
+     * @see submit(Job, SimpleBatchEnvironment)
+     */
     override def submit(job: Job) = {
-        /*for(env <- environmentsList.map(_._1)){
-            val bej = new BEJ(job, env)
-            EventDispatcher.trigger(env, new Environment.JobSubmitted(bej))
-            batchJobWatcher.register(bej)
-            jobManager ! Manage(bej)
-        }*/
-        //        environmentsList.foreach(e => e._1.submit(job))
         environmentsList.map(_._1).foreach(submit(job, _))
     }
 
+    /**
+     * Submit the job to the specified environment
+     * Will not use the submit function of the environment
+     * The job will be registered to the local jobManager.
+     * @param job The job to submit
+     * @param env The environment where to submit
+     */
     def submit(job: Job, env: SimpleBatchEnvironment) = {
         val bej = new BEJ(job, env)
         EventDispatcher.trigger(env, new Environment.JobSubmitted(bej))
@@ -85,7 +94,6 @@ class HybridEnvironment(
         // Unfinished : need to see for each environment
         // Use a set ?
 
-        println(environmentsList.head._1.batchJobWatcher.registry.allJobs.size)
         println(batchJobWatcher.registry.allJobs.size)
         println(batchJobWatcher.registry.allJobs.filter(_.finished).size)
         val unfinishedJobs = batchJobWatcher.registry.allJobs.filter(!_.finished)
@@ -121,12 +129,6 @@ class HybridEnvironment(
      * @param env The environment to keep
      */
     private def killExcept(job: Job, env: SimpleBatchEnvironment) = {
-        println(s"${
-            batchJobWatcher.registry
-                .executionJobs(job)
-                .filter(bej => bej.environment.asInstanceOf[SimpleBatchEnvironment] != env).size
-        } to kill")
-
         batchJobWatcher.registry
             .executionJobs(job)
             .filter(bej => bej.environment.asInstanceOf[SimpleBatchEnvironment] != env)

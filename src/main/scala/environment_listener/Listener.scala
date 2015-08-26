@@ -10,7 +10,7 @@ import org.openmole.tool.file._
 
 import scala.concurrent.stm._
 
-import predictron.{ PredictStrategy, AvgStrat }
+import predictron.{ PredictStrategy, ProrataStrat }
 
 object Listener extends Logger {
     private val env_list = mutable.MutableList[Environment]()
@@ -22,7 +22,7 @@ object Listener extends Logger {
     private var callback: t_callback = null // Init by registerCallback, reset by predictAndCall
     private val completedJob = mutable.MutableList[(Job, Environment)]()
     private val cJobPerEnv = TMap[Environment, Long]()
-    private val callThreshold: Long = 2
+    private val callThreshold: Long = 30
     private var strat: PredictStrategy = null // Is initialized in predictAndCall
 
     /**
@@ -84,10 +84,10 @@ object Listener extends Logger {
     /**
      * Add the job to the list of completed job.
      * Update the counter of completed job per environment
-     * Once each environment has enough completed jobs (according to the callThreshold val), will call
-     * predictAndCall
+     * Once number of completed > threshold (and each environment got at least one completed)
+     *  will call the predictAndCall function.
      * @see callThreshold
-     * @see predictAndWall
+     * @see predictAndCall
      * @param job The job completed
      * @param env The environment where is happened
      */
@@ -101,7 +101,7 @@ object Listener extends Logger {
                 completedJob += ((job, env))
                 cJobPerEnv(env) = cJobPerEnv(env) + 1
 
-                if (cJobPerEnv.forall(_._2 > callThreshold)) {
+                if (completedJob.size > callThreshold && cJobPerEnv.forall(_._2 > 0)) {
                     println("Will callback")
                     atomic { implicit ctx =>
                         cJobPerEnv.foreach(println)
@@ -254,7 +254,7 @@ object Listener extends Logger {
         val data = genDataPredict()
         println(s"Size data predict: ${data.keySet.size}")
 
-        strat = new AvgStrat
+        strat = new ProrataStrat
 
         val el = env_list.toList.map(e => e.asInstanceOf[SimpleBatchEnvironment])
         val predictions = strat.predict(data, el)
@@ -268,14 +268,7 @@ object Listener extends Logger {
      * @return The new data structure
      */
     private def genDataPredict(): Map[(Job, Environment), Map[String, Any]] = atomic { implicit ctx =>
-
-        //        completedJob.foreach(println)
-        //        println("--")
         val tmp = data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
-        //        tmp.keySet.foreach(println)
-        //        println("--")
-        //        data_store.keySet.foreach(println)
         tmp
-        // data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
     }
 }
