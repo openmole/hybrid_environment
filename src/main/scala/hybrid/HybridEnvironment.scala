@@ -18,11 +18,13 @@
 package hybrid
 
 import scala.util.Random
+import scala.collection.mutable
 
-import org.openmole.core.batch.environment.{ SimpleBatchExecutionJob, BatchEnvironment, SimpleBatchEnvironment }
+import org.openmole.core.batch.environment.{ BatchExecutionJob, SimpleBatchExecutionJob, BatchEnvironment, SimpleBatchEnvironment }
 import org.openmole.core.batch.environment.BatchEnvironment.jobManager
 import org.openmole.core.batch.refresh.{ JobManager, Manage }
 import org.openmole.core.workflow.execution.Environment
+import org.openmole.core.workflow.execution.ExecutionState.RUNNING
 import org.openmole.core.workflow.job.Job
 import org.openmole.core.workspace.AuthenticationProvider
 import org.openmole.core.event.EventDispatcher
@@ -45,13 +47,14 @@ class HybridEnvironment(
 
     val rng: (Int => Int) = new Random().nextInt
     val es = environmentsList.size
+    val reg = batchJobWatcher.registry
 
     /**
      * Register each environment to the Listener, and start the monitoring
      * Also register the callback function. Comment to deactivate
      */
     environmentsList.foreach(Listener.registerEnvironment)
-    //    Listener.registerCallback(callback)
+    Listener.registerCallback(callback)
     Listener.startMonitoring()
 
     /**
@@ -96,47 +99,62 @@ class HybridEnvironment(
         println("Called back")
         env_pred.foreach(println)
 
-        // Unfinished : need to see for each environment
-        // Use a set ?
-
-        println(batchJobWatcher.registry.allJobs.size)
-        println(batchJobWatcher.registry.allJobs.filter(_.finished).size)
-        val unfinishedJobs = batchJobWatcher.registry.allJobs.filter(!_.finished)
+        println(reg.allJobs.size)
+        println(reg.allJobs.count(_.finished))
 
         // Will now find the best "ratio" to schedule the jobs
         // ex: 0.5 on env1, 0.2 on env2, 0.3 on env3
         val s: Double = env_pred.map(_._2).sum
-        val r: Long = unfinishedJobs.size
+        val n = reg.allJobs.count(!_.finished)
         println(s)
-        println(r)
-        val env_r = env_pred.map(x => (x._1, (r * (1 - x._2 / s)).toLong))
+        println(n)
+        val env_n = env_pred.map(x => (x._1, (n * (1 - x._2 / s)).toInt)).sortBy(-_._2)
 
-        env_r.foreach(println)
+        env_n.foreach(println)
 
-        // Kill the duplicates
-        var i = 0
-        var t = 0
-        for (j <- unfinishedJobs) {
-            if (t > env_r(i)._2) {
-                i += 1
-                t = 0
-            }
-
-            killExcept(j, env_r(i)._1)
-
-            t += 1
-        }
+        adjustNumber(env_n)
     }
 
     /**
-     * Kill every BatchExecutionJob of the job except the one running on the said environment
-     * @param job The job concerned
-     * @param env The environment to keep
+     * Will kill and submit job for each environment to fit the given numbers
+     * When killing jobs of an environment, will try first to kill only jobs not running
+     * @param env_n The rules to follow. Sorted in decreased order
      */
-    private def killExcept(job: Job, env: SimpleBatchEnvironment) = {
-        batchJobWatcher.registry
-            .executionJobs(job)
-            .filter(bej => bej.environment.asInstanceOf[SimpleBatchEnvironment] != env)
-            .foreach(jobManager.killAndClean)
+    private def adjustNumber(env_n: List[(SimpleBatchEnvironment, Int)]) = {
+        // TODO Refactor
+        // TODO Put printf logs
+        val current_n = environmentsList.map(e => (e, reg.allExecutionJobs.count(_.environment == e)))
+
+        var pool_jobs = List[Job]()
+        for ((env, n) <- env_n) {
+            val current_n = reg.allExecutionJobs.count(_.environment == env)
+            var d: Int = current_n - n
+
+            if (d > 0) { // Too much jobs
+                // Will prioritize jobs not running
+                var toKill = List[BatchExecutionJob]()
+
+                val notRunning = reg.allExecutionJobs.filter(_.environment == env).filter(_.state != RUNNING)
+
+                toKill ++= notRunning.take(d)
+
+                if (d > notRunning.size) {
+                    d -= notRunning.size
+
+                    val running = reg.allExecutionJobs.filter(_.environment == env).filter(_.state == RUNNING)
+
+                    toKill ++= running.take(d)
+                }
+
+                pool_jobs ++= toKill.map(_.job)
+                toKill.foreach(jobManager.killAndClean)
+            } else if (d < 0) { // Not enough
+                d = -d
+                val toSubmit = pool_jobs.take(d)
+                pool_jobs = pool_jobs.drop(d)
+
+                toSubmit.foreach(submit(_, env))
+            }
+        }
     }
 }
