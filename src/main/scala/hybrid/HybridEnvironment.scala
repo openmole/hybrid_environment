@@ -33,19 +33,19 @@ object HybridEnvironment {
         // change order to allow variable list as last argument
         // FIXME find a way to have name = None while keeping the variable argument list
         name: Option[String],
-        environmentsList: (SimpleBatchEnvironment, Option[Double])*)(implicit authentications: AuthenticationProvider) =
+        environmentsList: SimpleBatchEnvironment*)(implicit authentications: AuthenticationProvider) =
         new HybridEnvironment(environmentsList, name)
 }
 
 class HybridEnvironment(
-        val environmentsList: Seq[(SimpleBatchEnvironment, Option[Double])],
+        val environmentsList: Seq[SimpleBatchEnvironment],
         override val name: Option[String] = None)(implicit authentications: AuthenticationProvider) extends SimpleBatchEnvironment { env ⇒
 
     /**
      * Register each environment to the Listener, and start the monitoring
      * Also register the callback function. Comment to deactivate
      */
-    environmentsList.map(_._1).foreach(Listener.registerEnvironment)
+    environmentsList.foreach(Listener.registerEnvironment)
     Listener.registerCallback(callback)
     Listener.startMonitoring()
 
@@ -55,7 +55,7 @@ class HybridEnvironment(
      * @see submit(Job, SimpleBatchEnvironment)
      */
     override def submit(job: Job) = {
-        environmentsList.map(_._1).foreach(submit(job, _))
+        environmentsList.foreach(submit(job, _))
     }
 
     /**
@@ -74,12 +74,12 @@ class HybridEnvironment(
 
     override def storage: SS = {
         println(s"Shouldn't be there: Hybrid storage")
-        environmentsList.head._1.storage.asInstanceOf[SS]
+        environmentsList.head.storage.asInstanceOf[SS]
     }
 
     override def jobService: JS = {
         println(s"Shouldn't be there: Hybrid job service")
-        environmentsList.head._1.jobService.asInstanceOf[JS]
+        environmentsList.head.jobService.asInstanceOf[JS]
     }
 
     /**
