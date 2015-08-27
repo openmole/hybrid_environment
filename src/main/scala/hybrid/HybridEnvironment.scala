@@ -24,7 +24,7 @@ import org.openmole.core.batch.environment.{ BatchExecutionJob, SimpleBatchExecu
 import org.openmole.core.batch.environment.BatchEnvironment.jobManager
 import org.openmole.core.batch.refresh.{ JobManager, Manage }
 import org.openmole.core.workflow.execution.Environment
-import org.openmole.core.workflow.execution.ExecutionState.RUNNING
+import org.openmole.core.workflow.execution.ExecutionState.{ RUNNING, SUBMITTED }
 import org.openmole.core.workflow.job.Job
 import org.openmole.core.workspace.AuthenticationProvider
 import org.openmole.core.event.EventDispatcher
@@ -107,8 +107,8 @@ class HybridEnvironment(
         val s: Double = env_pred.map(_._2).sum
         val n = reg.allJobs.count(!_.finished)
         println(s)
-        println(n)
-        val env_n = env_pred.map(x => (x._1, (n * (1 - x._2 / s)).toInt)).sortBy(-_._2)
+        println(s"Unfinished: $n")
+        val env_n = env_pred.map(x => (x._1, (n * (1 - x._2 / s)).toInt)).sortBy(_._2)
 
         env_n.foreach(println)
 
@@ -117,43 +117,42 @@ class HybridEnvironment(
 
     /**
      * Will kill and submit job for each environment to fit the given numbers
-     * When killing jobs of an environment, will try first to kill only jobs not running
+     * It won't kill running jobs, so the results may slightly differ from the rules
      * @param env_n The rules to follow. Sorted in decreased order
      */
     private def adjustNumber(env_n: List[(SimpleBatchEnvironment, Int)]) = {
-        // TODO Refactor
-        // TODO Put printf logs
-        val current_n = environmentsList.map(e => (e, reg.allExecutionJobs.count(_.environment == e)))
-
-        var pool_jobs = List[Job]()
+        var jobPool = List[BatchExecutionJob]()
         for ((env, n) <- env_n) {
-            val current_n = reg.allExecutionJobs.count(_.environment == env)
+            val current_n = reg.allExecutionJobs.filter(!_.job.finished).count(_.environment == env)
+            println(s"$env has currently $current_n")
             var d: Int = current_n - n
+            println(s"$env diff is $d")
 
             if (d > 0) { // Too much jobs
-                // Will prioritize jobs not running
-                var toKill = List[BatchExecutionJob]()
+                // Won't take running jobs
+                // So may take less than needed
+                var toGive = reg.allExecutionJobs.filter(_.environment == env)
+                    .filter(_.state == SUBMITTED)
+                    .take(d)
 
-                val notRunning = reg.allExecutionJobs.filter(_.environment == env).filter(_.state != RUNNING)
-
-                toKill ++= notRunning.take(d)
-
-                if (d > notRunning.size) {
-                    d -= notRunning.size
-
-                    val running = reg.allExecutionJobs.filter(_.environment == env).filter(_.state == RUNNING)
-
-                    toKill ++= running.take(d)
+                d -= toGive.size
+                if (d > 0) {
+                    toGive ++= reg.allExecutionJobs.filter(_.environment == env)
+                        .filter(_.state == RUNNING)
+                        .take(d)
                 }
 
-                pool_jobs ++= toKill.map(_.job)
-                toKill.foreach(jobManager.killAndClean)
+                println(s"$env giving ${toGive.size}")
+                jobPool ++= toGive
             } else if (d < 0) { // Not enough
                 d = -d
-                val toSubmit = pool_jobs.take(d)
-                pool_jobs = pool_jobs.drop(d)
 
-                toSubmit.foreach(submit(_, env))
+                val taken = jobPool.take(d)
+                jobPool = jobPool.drop(d)
+
+                println(s"$env taking ${taken.size}")
+                taken.map(_.job).foreach(submit(_, env))
+                taken.foreach(jobManager.killAndClean)
             }
         }
     }
