@@ -114,12 +114,16 @@ class EnvListener(env: Environment) extends Runnable {
                 create(job)
                 fillInputs(job)
                 processNewState(job, SUBMITTED, READY)
-            case (_, JobStateChanged(job, KILLED, oldState)) =>
+            case (_, JobStateChanged(job, KILLED, DONE)) =>
+                println(s"KILLED from DONE")
                 putTimings(job)
                 Listener.put(jobJob(job), env, "failed", false)
                 //                Listener.printJob(shortId(job))
                 Listener.jobCSV(jobJob(job), env)
                 Listener.completeJob(jobJob(job), env)
+                delete(job)
+            case (_, JobStateChanged(job, KILLED, oldState)) =>
+                println(s"KILLED from $oldState, won't record anything")
                 delete(job)
             case (_, JobStateChanged(job, FAILED, os)) =>
                 processNewState(job, FAILED, os)

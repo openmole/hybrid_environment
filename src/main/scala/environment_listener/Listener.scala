@@ -101,7 +101,7 @@ object Listener extends Logger {
                 completedJob += ((job, env))
                 cJobPerEnv(env) = cJobPerEnv(env) + 1
 
-                if (completedJob.size > callThreshold && cJobPerEnv.forall(_._2 > 0)) {
+                if ((completedJob.size % callThreshold) == 0 && cJobPerEnv.forall(_._2 > 0)) {
                     println("Will callback")
                     atomic { implicit ctx =>
                         cJobPerEnv.foreach(println)
@@ -247,9 +247,6 @@ object Listener extends Logger {
      * callback will be reset (null) at the end of the function.
      */
     private def predictAndCall() = {
-        val tmp_c = callback
-        callback = null
-
         println(s"Size job completed ${completedJob.size}")
         val data = genDataPredict()
         println(s"Size data predict: ${data.keySet.size}")
@@ -259,7 +256,7 @@ object Listener extends Logger {
         val el = env_list.toList.map(e => e.asInstanceOf[SimpleBatchEnvironment])
         val predictions = strat.predict(data, el)
 
-        tmp_c(predictions)
+        callback(predictions)
     }
 
     /**
