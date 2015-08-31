@@ -13,7 +13,12 @@ import scala.concurrent.stm._
 
 trait ListenerWriter {
     protected val data_store = TMap[(Job, Environment), TMap[String, Any]]()
-    protected var metrics: mutable.MutableList[String] = null
+    /* By being public, allow user to select which variabls he wants in the csv
+    * Also allow him to change the order */
+    var metrics: List[String] = List("env_kind", "env_name", "day_w",
+        "hour", "waitingTime", "execTime",
+        "totalTime", "failed", "id",
+        "senv")
     var csv_path: String = "/tmp/openmole.csv"
 
     /**
@@ -50,8 +55,6 @@ trait ListenerWriter {
 
         if (!file.exists()) {
             createCSV(file)
-        } else if (metrics == null) {
-            initMetrics()
         }
 
         for (je: (Job, Environment) <- data_store.keySet) {
@@ -69,8 +72,6 @@ trait ListenerWriter {
 
         if (!file.exists()) {
             createCSV(file)
-        } else if (metrics == null) {
-            initMetrics()
         }
 
         writeJobCSV((job, env), file)
@@ -112,7 +113,6 @@ trait ListenerWriter {
     private def writeHeader(file: File) {
         println("Writing header")
 
-        initMetrics()
         file.withWriter(true) { writer =>
             for (metric: String <- metrics) {
                 println(metric)
@@ -121,20 +121,5 @@ trait ListenerWriter {
             }
             writer.append("\n")
         }
-    }
-
-    /**
-     * Initialize the metrics attribute.
-     * Will take every metrics contained in the first datapoint, and sort them.
-     * If the metrics for waitingTime, execTime and totalTime are not in there, add them.
-     */
-    private def initMetrics() = atomic { implicit ctx =>
-        metrics = mutable.MutableList[String]()
-        metrics ++= data_store(data_store.keySet.head).keys.toList
-
-        // Not great but avoid hardcoding the whole list
-        metrics ++= List("waitingTime", "execTime", "totalTime", "failed").filterNot(metrics.contains)
-
-        metrics = metrics.sorted
     }
 }
