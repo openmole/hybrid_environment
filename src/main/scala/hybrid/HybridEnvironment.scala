@@ -139,36 +139,57 @@ class HybridEnvironment(
         var jobPool = List[BatchExecutionJob]()
         for ((env, n) <- env_n) {
             val current_n = reg.allExecutionJobs.filter(!_.job.finished).count(_.environment == env)
+            val d: Int = current_n - n
+
             println(s"$env has currently $current_n")
-            var d: Int = current_n - n
             println(s"$env diff is $d")
 
             if (d > 0) { // Too much jobs
-                // Won't take running jobs
-                // So may take less than needed
-                var toGive = reg.allExecutionJobs.filter(_.environment == env)
-                    .filter(_.state == SUBMITTED)
-                    .take(d)
-
-                d -= toGive.size
-                if (d > 0) {
-                    toGive ++= reg.allExecutionJobs.filter(_.environment == env)
-                        .filter(_.state == RUNNING)
-                        .take(d)
-                }
-
-                println(s"$env giving ${toGive.size}")
-                jobPool ++= toGive
+                jobPool ++= giveJobs(env, d)
             } else if (d < 0) { // Not enough
-                d = -d
-
-                val taken = jobPool.take(d)
-                jobPool = jobPool.drop(d)
-
-                println(s"$env taking ${taken.size}")
-                taken.map(_.job).foreach(submit(_, env))
-                taken.foreach(jobManager.killAndClean)
+                jobPool = takeJobs(env, -d, jobPool)
             }
         }
+    }
+
+    /**
+     * Take jobs from environment.
+     * Will try to minimize the number of running jobs.
+     * @param env The environment to plunder
+     * @param d The number of jobs to take
+     * @return List of selected jobs
+     */
+    private def giveJobs(env: SimpleBatchEnvironment, d: Int): List[BatchExecutionJob] = {
+        // First take only submitted
+        var toGive = reg.allExecutionJobs.filter(_.environment == env)
+            .filter(_.state == SUBMITTED)
+            .take(d)
+
+        // If not enough, will take from running
+        if ((d - toGive.size) > 0) {
+            toGive ++= reg.allExecutionJobs.filter(_.environment == env)
+                .filter(_.state == RUNNING)
+                .take(d)
+        }
+
+        println(s"$env giving ${toGive.size}")
+        toGive.toList
+    }
+
+    /**
+     * Will take d jobs from the pool, kill them and resubmit them on the environment
+     * Will send back the new jobPool
+     * @param env The environment to submit
+     * @param d The number of jobs to take
+     * @param jobPool The pool of jobs
+     */
+    private def takeJobs(env: SimpleBatchEnvironment, d: Int, jobPool: List[BatchExecutionJob]): List[BatchExecutionJob] = {
+        val taken = jobPool.take(d)
+
+        println(s"$env taking ${taken.size}")
+        taken.map(_.job).foreach(submit(_, env))
+        taken.foreach(jobManager.killAndClean)
+
+        jobPool.drop(d)
     }
 }

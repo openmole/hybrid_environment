@@ -11,7 +11,7 @@ import scala.concurrent.stm._
 
 trait ListenerWriter {
     protected val data_store = TMap[(Job, Environment), TMap[String, Any]]()
-    /* By being public, allow user to select which variabls he wants in the csv
+    /* By being public, allow user to select which variables he wants in the csv
     * Also allow him to change the order */
     var metrics: List[String] = List("env_kind", "env_name", "day_w",
         "hour", "waitingTime", "execTime",
