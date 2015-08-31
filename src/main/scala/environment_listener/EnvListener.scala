@@ -116,9 +116,8 @@ class EnvListener(env: Environment) extends Runnable {
                 processNewState(job, SUBMITTED, READY)
             case (_, JobStateChanged(job, KILLED, DONE)) =>
                 println(s"KILLED from DONE")
-                putTimings(job)
+                putTimings(job, DONE)
                 Listener.put(jobJob(job), env, "failed", false)
-                //                Listener.printJob(shortId(job))
                 Listener.jobCSV(jobJob(job), env)
                 Listener.completeJob(jobJob(job), env)
                 delete(job)
@@ -127,7 +126,7 @@ class EnvListener(env: Environment) extends Runnable {
                 delete(job)
             case (_, JobStateChanged(job, FAILED, os)) =>
                 processNewState(job, FAILED, os)
-                failedTimings(job)
+                putTimings(job, FAILED)
                 Listener.put(jobJob(job), env, "failed", true)
                 Listener.jobCSV(jobJob(job), env)
                 delete(job)
@@ -212,7 +211,7 @@ class EnvListener(env: Environment) extends Runnable {
     }
 
     /**
-     * Differenciate the timings between the two states, and put them in the data store.
+     * Differentiate the timings between the two states, and put them in the data store.
      * t(laterState) - t(earlyState)
      * If at least one state is not found, will put 0 as value.
      * @param job The job concerned by the timing.
@@ -235,28 +234,15 @@ class EnvListener(env: Environment) extends Runnable {
      * Should be called once the current state is KILLED.
      * It will compute all the defined timings using the saved times in jobTimings
      * At the moment, compute :
-     *  totalTime = Done - submitted
-     *  execTime = Done - running
+     *  totalTime = stateFrom - submitted
+     *  execTime = stateFrom - running
      *  waitingTime = running - submitted
      * @param job The job
+     * @param stateFrom Usually DONE or FAILED
      */
-    private def putTimings(job: ExecutionJob) = {
-        putDiff(job, "totalTime", DONE.toString(), SUBMITTED.toString())
-        putDiff(job, "execTime", DONE.toString(), RUNNING.toString())
-        putDiff(job, "waitingTime", RUNNING.toString(), SUBMITTED.toString())
-    }
-
-    /**
-     * Does the same at putTimings, but in the case of a failed job
-     * Does:
-     *  totalTime = failed - submitted
-     *  execTime = failed - running
-     *  waitingTime = running - submitted
-     * @param job The job that failed
-     */
-    private def failedTimings(job: ExecutionJob) = {
-        putDiff(job, "totalTime", FAILED.toString(), SUBMITTED.toString())
-        putDiff(job, "execTime", FAILED.toString(), RUNNING.toString())
+    private def putTimings(job: ExecutionJob, stateFrom: ExecutionState) = {
+        putDiff(job, "totalTime", stateFrom.toString(), SUBMITTED.toString())
+        putDiff(job, "execTime", stateFrom.toString(), RUNNING.toString())
         putDiff(job, "waitingTime", RUNNING.toString(), SUBMITTED.toString())
     }
 }
