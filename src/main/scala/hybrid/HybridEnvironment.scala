@@ -18,11 +18,10 @@
 package hybrid
 
 import scala.util.Random
-import scala.collection.mutable
 
-import org.openmole.core.batch.environment.{ BatchExecutionJob, SimpleBatchExecutionJob, BatchEnvironment, SimpleBatchEnvironment }
+import org.openmole.core.batch.environment.{ BatchExecutionJob, SimpleBatchEnvironment }
 import org.openmole.core.batch.environment.BatchEnvironment.jobManager
-import org.openmole.core.batch.refresh.{ JobManager, Manage }
+import org.openmole.core.batch.refresh.Manage
 import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.workflow.execution.ExecutionState.{ RUNNING, SUBMITTED }
 import org.openmole.core.workflow.job.Job
@@ -30,31 +29,37 @@ import org.openmole.core.workspace.AuthenticationProvider
 import org.openmole.core.event.EventDispatcher
 
 import environment_listener.Listener
+import local_predictron.LocalStrategy
+import global_predictron.GlobalStrategy
 
 object HybridEnvironment {
 
     def apply(
-        // change order to allow variable list as last argument
-        // FIXME find a way to have name = None while keeping the variable argument list
         name: Option[String],
+        size_feedback: Long,
+        localStrategy: LocalStrategy,
+        globalStrategy: GlobalStrategy,
         environmentsList: SimpleBatchEnvironment*)(implicit authentications: AuthenticationProvider) =
-        new HybridEnvironment(environmentsList, name)
+        new HybridEnvironment(environmentsList, name, size_feedback, localStrategy, globalStrategy)
 }
 
 class HybridEnvironment(
         val environmentsList: Seq[SimpleBatchEnvironment],
-        override val name: Option[String] = None)(implicit authentications: AuthenticationProvider) extends SimpleBatchEnvironment { env ⇒
+        override val name: Option[String] = None,
+        val sizeFeedback: Long,
+        val localStrategy: LocalStrategy,
+        val globalStrategy: GlobalStrategy)(implicit authentications: AuthenticationProvider) extends SimpleBatchEnvironment { env ⇒
 
-    val rng: (Int => Int) = new Random().nextInt
-    val es = environmentsList.size
-    val reg = batchJobWatcher.registry
+    private val rng: (Int => Int) = new Random().nextInt
+    private val es = environmentsList.size
+    private val reg = batchJobWatcher.registry
 
     /**
      * Register each environment to the Listener, and start the monitoring
      * Also register the callback function. Comment to deactivate
      */
     environmentsList.foreach(Listener.registerEnvironment)
-    Listener.registerCallback(callback)
+    Listener.registerCallback(callback, sizeFeedback)
     Listener.startMonitoring()
 
     /**
@@ -92,27 +97,35 @@ class HybridEnvironment(
 
     /**
      * Function called by the Listener singleton when it got enough data to generate accurate predictions
-     * Will decide which environment keep which BatchExecutionJob
-     * @param env_pred The list of the predictions
+     * Contains only data about completed jobs
+     * @param data Data of the completed jobs
      */
-    def callback(env_pred: List[(SimpleBatchEnvironment, Double)]) = {
+    def callback(data: Map[(Job, Environment), Map[String, Any]]) = {
         println("Called back")
-        env_pred.foreach(println)
 
-        println(reg.allJobs.size)
-        println(reg.allJobs.count(_.finished))
+        val local_pred = localStrategy.predict(data, environmentsList.toList)
+        println("Local pred:")
+        local_pred.foreach(println)
 
-        // Will now find the best "ratio" to schedule the jobs
-        // ex: 0.5 on env1, 0.2 on env2, 0.3 on env3
+        val global_pred = globalStrategy.predict(data, environmentsList.toList, local_pred)
+        println("Global pred:")
+        global_pred.foreach(println)
+
+        val env_n = compute_repartition(global_pred)
+        println("Repartition:")
+        env_n.foreach(println)
+        enforce_repartition(env_n)
+    }
+
+    /**
+     * Calculate, witht the predictions, the optimal number of jobs for each environment
+     * @param env_pred The time prediction
+     * @return Tuples of Environments and number of jobs they should have
+     */
+    private def compute_repartition(env_pred: List[(SimpleBatchEnvironment, Double)]): List[(SimpleBatchEnvironment, Int)] = {
         val s: Double = env_pred.map(_._2).sum
         val n = reg.allJobs.count(!_.finished)
-        println(s)
-        println(s"Unfinished: $n")
-        val env_n = env_pred.map(x => (x._1, (n * (1 - x._2 / s)).toInt)).sortBy(_._2)
-
-        env_n.foreach(println)
-
-        adjustNumber(env_n)
+        env_pred.map(x => (x._1, (n * (1 - x._2 / s)).toInt)).sortBy(_._2)
     }
 
     /**
@@ -120,7 +133,9 @@ class HybridEnvironment(
      * It won't kill running jobs, so the results may slightly differ from the rules
      * @param env_n The rules to follow. Sorted in decreased order
      */
-    private def adjustNumber(env_n: List[(SimpleBatchEnvironment, Int)]) = {
+    private def enforce_repartition(env_n: List[(SimpleBatchEnvironment, Int)]) = {
+        // TODO : Refactor, this thing is definitely too huge.
+
         var jobPool = List[BatchExecutionJob]()
         for ((env, n) <- env_n) {
             val current_n = reg.allExecutionJobs.filter(!_.job.finished).count(_.environment == env)

@@ -1,10 +1,10 @@
-package predictron
+package local_predictron
 
 import org.openmole.core.batch.environment.SimpleBatchEnvironment
 import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.workflow.job.Job
 
-class AvgStrat extends PredictStrategy {
+object AvgStrat extends LocalStrategy {
 
     def predict(data: Map[(Job, Environment), Map[String, Any]], env_l: List[SimpleBatchEnvironment]): List[(SimpleBatchEnvironment, Double)] = {
 

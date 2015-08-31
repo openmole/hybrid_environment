@@ -1,10 +1,10 @@
-package predictron
+package local_predictron
 
 import org.openmole.core.batch.environment.SimpleBatchEnvironment
 import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.workflow.job.Job
 
-abstract class PredictStrategy {
+abstract class LocalStrategy {
     /**
      * Will predict the execution time of the job for each environment
      * @param data The data_store of the completed jobs

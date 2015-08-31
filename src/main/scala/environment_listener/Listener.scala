@@ -3,24 +3,21 @@ package environment_listener
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
-import org.openmole.core.batch.environment.{ SimpleBatchEnvironment, BatchEnvironment }
+import org.openmole.core.batch.environment.BatchEnvironment
 import org.openmole.core.workflow.job.Job
 
-import org.openmole.tool.file._
-
 import scala.concurrent.stm._
-
-import predictron.{ PredictStrategy, ProrataStrat }
 
 object Listener extends Logger with ListenerWriter {
     private val env_list = mutable.MutableList[Environment]()
 
-    private type t_callback = (List[(SimpleBatchEnvironment, Double)] => Unit)
-    private var callback: t_callback = null // Init by registerCallback, reset by predictAndCall
+    private type t_callback = (Map[(Job, Environment), Map[String, Any]] => Unit)
     private val completedJob = mutable.MutableList[(Job, Environment)]()
     private val cJobPerEnv = TMap[Environment, Long]()
-    private val callThreshold: Long = 30
-    private var strat: PredictStrategy = null // Is initialized in predictAndCall
+
+    /* Are initialized by registerCallback*/
+    private var callThreshold: Long = -1
+    private var callback: t_callback = null
 
     /**
      * Register a new environment that will be listened to
@@ -94,6 +91,7 @@ object Listener extends Logger with ListenerWriter {
                 println("Wut: $job not in data store")
             }
 
+            // FIX :  not efficient
             if (!completedJob.map(_._1).contains(job)) {
                 completedJob += ((job, env))
                 cJobPerEnv(env) = cJobPerEnv(env) + 1
@@ -103,7 +101,8 @@ object Listener extends Logger with ListenerWriter {
                     atomic { implicit ctx =>
                         cJobPerEnv.foreach(println)
                     }
-                    predictAndCall()
+
+                    callback(exportCompletedJobs())
                 }
             }
         }
@@ -113,33 +112,16 @@ object Listener extends Logger with ListenerWriter {
      * The callback function will be called (if defined) when the Listener got enough data to predict execution time
      * @param fct The function to be called.
      */
-    def registerCallback(fct: t_callback) = {
+    def registerCallback(fct: t_callback, feedback_size: Long) = {
         callback = fct
+        callThreshold = feedback_size
     }
 
     /**
-     * Will predict the times, and then call the callback, giving it the predictions as parameters.
-     * callback will be reset (null) at the end of the function.
+     * Will export the data of the completed jobs (contained in the completedJob list
+     * @return The new data structure with the data
      */
-    private def predictAndCall() = {
-        println(s"Size job completed ${completedJob.size}")
-        val data = genDataPredict()
-        println(s"Size data predict: ${data.keySet.size}")
-
-        strat = new ProrataStrat
-
-        val el = env_list.toList.map(e => e.asInstanceOf[SimpleBatchEnvironment])
-        val predictions = strat.predict(data, el)
-
-        callback(predictions)
-    }
-
-    /**
-     * Change the data_structure for the prediction module
-     * From Tmap to map
-     * @return The new data structure
-     */
-    private def genDataPredict(): Map[(Job, Environment), Map[String, Any]] = atomic { implicit ctx =>
+    private def exportCompletedJobs(): Map[(Job, Environment), Map[String, Any]] = atomic { implicit ctx =>
         val tmp = data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
         tmp
     }

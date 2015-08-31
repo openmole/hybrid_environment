@@ -6,9 +6,7 @@ import environment_listener.Listener._
 import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.workflow.job.Job
 import org.openmole.tool.file._
-import org.openmole.tool.logger.Logger
 
-import scala.collection.mutable
 import scala.concurrent.stm._
 
 trait ListenerWriter {

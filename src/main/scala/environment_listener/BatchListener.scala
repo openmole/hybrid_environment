@@ -1,7 +1,6 @@
 package environment_listener
 
 import java.util.Calendar
-import org.openmole.core.workflow.execution.ExecutionJob
 
 import scala.collection.mutable
 
