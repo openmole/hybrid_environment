@@ -8,7 +8,7 @@ object ProrataStrat extends LocalStrategy {
 
     def predict(data: Map[(Job, Environment), Map[String, Any]], env_l: List[SimpleBatchEnvironment]): List[(SimpleBatchEnvironment, Double)] = {
         println("Predict prorata")
-        val dl = data.values
+        val dl = data.values.filter(_("completed").asInstanceOf[Boolean])
         val maxTime = dl.map(_("totalTime").asInstanceOf[Long]).max
         println(s"maxTime: $maxTime")
 

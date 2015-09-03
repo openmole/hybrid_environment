@@ -9,7 +9,7 @@ object AvgStrat extends LocalStrategy {
     def predict(data: Map[(Job, Environment), Map[String, Any]], env_l: List[SimpleBatchEnvironment]): List[(SimpleBatchEnvironment, Double)] = {
 
         println("Predict")
-        val dl: List[Map[String, Any]] = data.values.toList
+        val dl: List[Map[String, Any]] = data.values.filter(_("completed").asInstanceOf[Boolean]).toList
         println(dl.size)
         def calcAvg(env: SimpleBatchEnvironment) = {
             println("AVG")

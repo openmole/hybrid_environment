@@ -97,7 +97,10 @@ object Listener extends Logger with ListenerWriter {
 
             // FIX :  not efficient
             if (!completedJob.map(_._1).contains(job)) {
-                completedJob += ((job, env))
+                this.synchronized{
+                    completedJob += ((job, env))
+                }
+
                 cJobPerEnv(env) = cJobPerEnv(env) + 1
 
                 if ((completedJob.size % callThreshold) == 0 && cJobPerEnv.forall(_._2 > 0)) {
