@@ -103,6 +103,9 @@ class HybridEnvironment(
     def callback(data: Map[(Job, Environment), Map[String, Any]]) = {
         println("Called back")
 
+        println("Testing splitter")
+        Splitter.split(data)
+
         val local_pred = localStrategy.predict(data, environmentsList.toList)
         println("Local pred:")
         local_pred.foreach(println)

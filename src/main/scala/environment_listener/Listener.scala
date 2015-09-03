@@ -72,6 +72,10 @@ object Listener extends Logger with ListenerWriter {
      */
     def put(job: Job, env: Environment, m: String, v: Any) = atomic { implicit ctx =>
         //        println(s"Put: $job_id $m = $v")
+        //        println(s"Getting $m for ($job, $env)")
+        if (!env_list.contains(env)) {
+            println(s"Error: $env is not contained is the list")
+        }
         data_store((job, env))(ctx)(m) = v
     }
 

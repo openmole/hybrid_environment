@@ -26,13 +26,15 @@ class BatchListener(env: BatchEnvironment) extends Runnable {
                 //                println(s"$n Begin upload on $job with id $id")
                 n += 1
                 Listener.createJobMap(job, env.asInstanceOf[Environment])
-                timingList(job) = Calendar.getInstance().getTimeInMillis
+                timingList(job) = Calendar.getInstance().getTimeInMillis / 1000
             case (_, EndUpload(id, file, path, storage, job, exception)) =>
                 //                println(s"Ended upload on $job with id $id")
                 Listener.put(job,
-                    env.asInstanceOf[Environment],
+                    env,
                     "uploadTime",
-                    Calendar.getInstance().getTimeInMillis - timingList(job))
+                    Calendar.getInstance().getTimeInMillis / 1000 - timingList(job))
+                //                println(s"$job, $env")
+                //                Listener.printJob((job, env))
                 timingList.remove(job)
         }
     }

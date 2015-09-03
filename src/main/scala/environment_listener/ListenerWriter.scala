@@ -15,8 +15,8 @@ trait ListenerWriter {
     * Also allow him to change the order */
     var metrics: List[String] = List("env_kind", "env_name", "day_w",
         "hour", "waitingTime", "execTime",
-        "totalTime", "failed", "id",
-        "senv")
+        "totalTime", "failed",
+        "id", "senv")
     var csv_path: String = "/tmp/openmole.csv"
 
     /**

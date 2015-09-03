@@ -28,7 +28,7 @@ object EnvListener {
     date_list += ((new SimpleDateFormat("mm"), "min"))
     date_list += ((new SimpleDateFormat("ss"), "sec"))
     date_list += ((new SimpleDateFormat("dd"), "day_m"))
-    date_list += ((new SimpleDateFormat("F"), "day_w"))
+    date_list += ((new SimpleDateFormat("F"), "day_w")) // Goes from 1 to 7
     date_list += ((new SimpleDateFormat("Z"), "timezone"))
     date_list += ((new SimpleDateFormat("M"), "month"))
 }
@@ -118,6 +118,7 @@ class EnvListener(env: Environment) extends Runnable {
                 println(s"KILLED from DONE")
                 putTimings(job, DONE)
                 Listener.put(jobJob(job), env, "failed", false)
+                //                Listener.printJob((jobJob(job), env))
                 Listener.jobCSV(jobJob(job), env)
                 Listener.completeJob(jobJob(job), env)
                 delete(job)
