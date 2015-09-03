@@ -1,23 +1,22 @@
 package local_predictron
 
+import hybrid.HybridEnvironment._
 import org.openmole.core.batch.environment.SimpleBatchEnvironment
 import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.workflow.job.Job
 
+/**
+ * Does an average on the values from the chunk. Only use data from completed jobs.
+ */
 object AvgStrat extends LocalStrategy {
+    def subpredict(data: List[Map[String, Any]], env_l: List[SimpleBatchEnvironment]): (t_pred, Int) = {
 
-    def predict(data: Map[(Job, Environment), Map[String, Any]], env_l: List[SimpleBatchEnvironment]): List[(SimpleBatchEnvironment, Double)] = {
-
-        println("Predict")
-        val dl: List[Map[String, Any]] = data.values.filter(_("completed").asInstanceOf[Boolean]).toList
-        println(dl.size)
+        val dl: List[Map[String, Any]] = data.filter(_("completed").asInstanceOf[Boolean]).toList
         def calcAvg(env: SimpleBatchEnvironment) = {
-            println("AVG")
-            println(dl.filter(m => m("senv") == env).size)
             avg(dl.filter(m => m("senv") == env).map(m => m("execTime").asInstanceOf[Long]))
         }
 
-        env_l.map(e => (e, calcAvg(e)))
+        (env_l.map(e => (e, calcAvg(e))), dl.size)
     }
 
     /**

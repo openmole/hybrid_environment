@@ -97,7 +97,7 @@ object Listener extends Logger with ListenerWriter {
 
             // FIX :  not efficient
             if (!completedJob.map(_._1).contains(job)) {
-                this.synchronized{
+                this.synchronized {
                     completedJob += ((job, env))
                 }
 

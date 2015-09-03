@@ -32,7 +32,10 @@ import environment_listener.Listener
 import local_predictron.LocalStrategy
 import global_predictron.GlobalStrategy
 
+import HybridEnvironment._
+
 object HybridEnvironment {
+    type t_pred = List[(SimpleBatchEnvironment, Double)]
 
     def apply(
         name: Option[String],
@@ -98,26 +101,30 @@ class HybridEnvironment(
     /**
      * Function called by the Listener singleton when it got enough data to generate accurate predictions
      * Contains only data about completed jobs
+     * Actually implement the whole feedback loop.
      * @param data Data of the completed jobs
      */
     def callback(data: Map[(Job, Environment), Map[String, Any]]) = {
         println("Called back")
 
-        println("Testing splitter")
-        Splitter.split(data)
+        val splitted: List[List[Map[String, Any]]] = Splitter.split(data)
 
-        val local_pred = localStrategy.predict(data, environmentsList.toList)
-        println("Local pred:")
-        local_pred.foreach(println)
+        val (current_pred, cw, previous_pred, pw): (t_pred, Int, t_pred, Int) =
+            localStrategy.predict(splitted, environmentsList.toList)
+        println("Current pred:")
+        current_pred.foreach(println)
 
-        val global_pred = globalStrategy.predict(data, environmentsList.toList, local_pred)
-        println("Global pred:")
-        global_pred.foreach(println)
+        val u_previous_pred: t_pred =
+            globalStrategy.predict(data, environmentsList.toList, previous_pred)
+        println("Previous pred:")
+        u_previous_pred.foreach(println)
 
-        val env_n = compute_repartition(global_pred)
+        val pred: t_pred = Merger.merge(u_previous_pred, pw, current_pred, cw)
+
+        val env_r = compute_repartition(pred)
         println("Repartition:")
-        env_n.foreach(println)
-        enforce_repartition(env_n)
+        env_r.foreach(println)
+        enforce_repartition(env_r)
     }
 
     /**
@@ -169,7 +176,7 @@ class HybridEnvironment(
             .take(d)
 
         // If not enough, will take from running
-        if ((d - toGive.size) > 0) {
+        if (toGive.size < d) {
             toGive ++= reg.allExecutionJobs.filter(_.environment == env)
                 .filter(_.state == RUNNING)
                 .take(d)
