@@ -104,7 +104,7 @@ class HybridEnvironment(
      * Actually implement the whole feedback loop.
      * @param data Data of the completed jobs
      */
-    def callback(data: Map[(Job, Environment), Map[String, Any]]) = {
+    def callback(data: Map[(Job, String), Map[String, Any]]) = {
         println("Called back")
 
         val splitted: List[List[Map[String, Any]]] = Splitter.split(data)
@@ -115,11 +115,13 @@ class HybridEnvironment(
         current_pred.foreach(println)
 
         val u_previous_pred: t_pred =
-            globalStrategy.predict(data, environmentsList.toList, previous_pred)
+            globalStrategy.predict(environmentsList.toList, previous_pred)
         println("Previous pred:")
         u_previous_pred.foreach(println)
 
         val pred: t_pred = Merger.merge(u_previous_pred, pw, current_pred, cw)
+        println("Final pred:")
+        pred.foreach(println)
 
         val env_r = compute_repartition(pred)
         println("Repartition:")

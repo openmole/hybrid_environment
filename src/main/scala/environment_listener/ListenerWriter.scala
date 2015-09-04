@@ -10,12 +10,12 @@ import org.openmole.tool.file._
 import scala.concurrent.stm._
 
 trait ListenerWriter {
-    protected val data_store = TMap[(Job, Environment), TMap[String, Any]]()
+    protected val data_store = TMap[(Job, String), TMap[String, Any]]()
     /* By being public, allow user to select which variables he wants in the csv
     * Also allow him to change the order */
     var metrics: List[String] = List("env_kind", "env_name", "day_w",
         "hour", "waitingTime", "execTime",
-        "totalTime", "failed",
+        "totalTime", "failed", "uploadTime",
         "id", "senv")
     var csv_path: String = "/tmp/openmole.csv"
 
@@ -34,7 +34,7 @@ trait ListenerWriter {
      * Print all the informations stored about the job_id.
      * @param je The job to display
      */
-    def printJob(je: (Job, Environment)) = atomic { implicit ctx =>
+    def printJob(je: (Job, String)) = atomic { implicit ctx =>
         println(s"Job: ${je._1}")
         for (metric: String <- data_store(je).keys) {
             println(s"\t$metric : ${data_store(je)(ctx)(metric)}")
@@ -51,11 +51,13 @@ trait ListenerWriter {
         Log.logger.info(s"Dumping data store to $csv_path")
         val file: File = new File(csv_path)
 
-        if (!file.exists()) {
-            createCSV(file)
+        this.synchronized {
+            if (!file.exists()) {
+                createCSV(file)
+            }
         }
 
-        for (je: (Job, Environment) <- data_store.keySet) {
+        for (je: (Job, String) <- data_store.keySet) {
             writeJobCSV(je, file)
         }
     }
@@ -68,11 +70,13 @@ trait ListenerWriter {
         //        Log.logger.info(s"Writing job $job measurements to $csv_path.")
         val file: File = new File(csv_path)
 
-        if (!file.exists()) {
-            createCSV(file)
+        this.synchronized {
+            if (!file.exists()) {
+                createCSV(file)
+            }
         }
 
-        writeJobCSV((job, env), file)
+        writeJobCSV((job, env.toString()), file)
     }
 
     /**
@@ -81,7 +85,7 @@ trait ListenerWriter {
      * @param je The job to be written.
      * @param file The destination file.
      */
-    private def writeJobCSV(je: (Job, Environment), file: File) = atomic { implicit ctx =>
+    private def writeJobCSV(je: (Job, String), file: File) = atomic { implicit ctx =>
 
         file.withWriter(true) { writer =>
             for (metric: String <- metrics) {

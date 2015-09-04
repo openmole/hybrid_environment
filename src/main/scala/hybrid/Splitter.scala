@@ -21,7 +21,7 @@ object Splitter {
      * @param data The data to be splitted
      * @return (data chunk0, data chunk-1, data chunk-2, ...)
      */
-    def split(data: Map[(Job, Environment), Map[String, Any]]): List[List[Map[String, Any]]] = {
+    def split(data: Map[(Job, String), Map[String, Any]]): List[List[Map[String, Any]]] = {
         updateCurrentChunk()
         println(s"Current Chunk: $current_chunk")
 

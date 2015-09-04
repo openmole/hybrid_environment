@@ -6,8 +6,7 @@ import org.openmole.core.workflow.job.Job
 
 object BlankStrat extends GlobalStrategy {
 
-    def predict(data: Map[(Job, Environment), Map[String, Any]],
-        env_l: List[SimpleBatchEnvironment],
+    def predict(env_l: List[SimpleBatchEnvironment],
         local_pred: List[(SimpleBatchEnvironment, Double)]): List[(SimpleBatchEnvironment, Double)] = {
         local_pred
     }

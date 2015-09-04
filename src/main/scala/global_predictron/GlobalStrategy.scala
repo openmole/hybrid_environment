@@ -12,7 +12,6 @@ abstract class GlobalStrategy {
      * @param local_pred The prediction of the local strategy
      * @return A list of environment with predicted time
      */
-    def predict(data: Map[(Job, Environment), Map[String, Any]],
-        env_l: List[SimpleBatchEnvironment],
+    def predict(env_l: List[SimpleBatchEnvironment],
         local_pred: List[(SimpleBatchEnvironment, Double)]): List[(SimpleBatchEnvironment, Double)]
 }

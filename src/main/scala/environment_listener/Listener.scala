@@ -6,12 +6,14 @@ import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.batch.environment.BatchEnvironment
 import org.openmole.core.workflow.job.Job
 
+import org.openmole.core.workflow.puzzle.Puzzle
+
 import scala.concurrent.stm._
 
 object Listener extends Logger with ListenerWriter {
     private val env_list = mutable.MutableList[Environment]()
 
-    private type t_callback = (Map[(Job, Environment), Map[String, Any]] => Unit)
+    private type t_callback = (Map[(Job, String), Map[String, Any]] => Unit)
     private val completedJob = mutable.MutableList[(Job, Environment)]()
     private val cJobPerEnv = TMap[Environment, Long]()
 
@@ -26,6 +28,12 @@ object Listener extends Logger with ListenerWriter {
      */
     def registerEnvironment(env: Environment) {
         env_list += env
+    }
+
+    def listenPuzzle(p: Puzzle) {
+        println("Listening to puzzle")
+        p.toExecution.start
+        println("Puzzle started")
     }
 
     /**
@@ -56,10 +64,11 @@ object Listener extends Logger with ListenerWriter {
      * @param job The job
      */
     def createJobMap(job: Job, env: Environment) = atomic { implicit ctx =>
-        if (data_store contains job) {
+        if (data_store contains (job, env.toString())) {
             //            Log.logger.severe(s"$job_id already created")
+            println(s"$job in $env already created")
         } else {
-            data_store((job, env)) = TMap[String, Any]()
+            data_store((job, env.toString())) = TMap[String, Any]()
         }
     }
 
@@ -76,7 +85,7 @@ object Listener extends Logger with ListenerWriter {
         if (!env_list.contains(env)) {
             println(s"Error: $env is not contained is the list")
         }
-        data_store((job, env))(ctx)(m) = v
+        data_store((job, env.toString()))(ctx)(m) = v
     }
 
     /**
@@ -128,7 +137,7 @@ object Listener extends Logger with ListenerWriter {
      * Will export the data of the completed jobs (contained in the completedJob list
      * @return The new data structure with the data
      */
-    private def exportCompletedJobs(): Map[(Job, Environment), Map[String, Any]] = atomic { implicit ctx =>
+    private def exportCompletedJobs(): Map[(Job, String), Map[String, Any]] = atomic { implicit ctx =>
         val tmp = data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
         tmp
     }
