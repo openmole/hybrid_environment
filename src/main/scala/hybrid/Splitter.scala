@@ -50,7 +50,7 @@ object Splitter {
      * @param datapoint The datapoint
      * @return Its chunk
      */
-    private def getChunk(datapoint: Map[String, Any]): Int = {
+    def getChunk(datapoint: Map[String, Any]): Int = {
         (datapoint("day_w").asInstanceOf[String].toInt - 1) * 11
         +datapoint("hour").asInstanceOf[String].toInt / 2
     }

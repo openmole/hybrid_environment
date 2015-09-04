@@ -8,7 +8,6 @@ import org.openmole.core.event._
 
 import org.openmole.core.batch.environment.BatchEnvironment
 import org.openmole.core.batch.environment.BatchEnvironment.{ BeginUpload, EndUpload }
-import org.openmole.core.workflow.execution.Environment
 
 import org.openmole.core.workflow.job.Job
 
