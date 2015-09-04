@@ -113,6 +113,7 @@ class EnvListener(env: Environment) extends Runnable {
             case (_, JobStateChanged(job, SUBMITTED, READY)) =>
                 create(job)
                 fillInputs(job)
+                Listener.put(jobJob(job), env, "completed", false)
                 processNewState(job, SUBMITTED, READY)
             case (_, JobStateChanged(job, KILLED, DONE)) =>
                 println(s"KILLED from DONE")
@@ -128,7 +129,6 @@ class EnvListener(env: Environment) extends Runnable {
                 processNewState(job, KILLED, oldState)
                 putTimings(job, KILLED)
                 Listener.put(jobJob(job), env, "failed", false)
-                Listener.put(jobJob(job), env, "completed", false)
                 Listener.jobCSV(jobJob(job), env)
                 delete(job)
             case (_, JobStateChanged(job, FAILED, os)) =>

@@ -16,7 +16,7 @@ import hybrid.Splitter.getChunk
 
 abstract class GlobalStrategy {
     protected var path: String = null
-    protected val knowledge = new mutable.HashMap[(String, String), Array[(Double, Int)]]()
+    val knowledge = new mutable.HashMap[(String, String), Array[(Double, Int)]]()
 
     /**
      * Will predict the execution time of the job for each environment, using the predictions of the local strategy as well.
@@ -40,9 +40,8 @@ abstract class GlobalStrategy {
                 val (key, values) = line.split(" ").splitAt(2)
                 load_environment(key(0), key(1), values)
             }
-
         } catch {
-            case ex: Exception => // No such file
+            case ex: Exception => println(s"Load error: no such file as $path")
         }
 
         knowledge.foreach(println)
@@ -52,7 +51,7 @@ abstract class GlobalStrategy {
      * Create a new list (of knowledge) for the environment
      * @param env The environment to add
      */
-    protected def add_environment(env: SimpleBatchEnvironment) {
+    def add_environment(env: SimpleBatchEnvironment) {
         val key = envToKey(env)
         add_environment(key._1, key._2)
     }
@@ -104,8 +103,11 @@ abstract class GlobalStrategy {
      * Update and save the knowledge.
      * Use the previous set path variable (with function load)
      * @param data The data needed to update the knowledge
+     *             Assume contains only completed jobs
      */
     def save(data: Map[(Job, String), Map[String, Any]], lenv: List[SimpleBatchEnvironment]) {
+        println(s"Saving with ${data.size} samples.")
+
         // Update for each environment
         lenv.foreach(e =>
             update_env(envToKey(e), data.filter(_._2("senv").asInstanceOf[String] == e.toString)))
@@ -117,6 +119,9 @@ abstract class GlobalStrategy {
 
         // Loop to write line by line
         knowledge.foreach(writeKnowledge(bw, _))
+
+        bw.flush()
+        bw.close()
     }
 
     /**
@@ -125,6 +130,7 @@ abstract class GlobalStrategy {
      * @param k The knowledge to write
      */
     protected def writeKnowledge(bw: BufferedWriter, k: ((String, String), Array[(Double, Int)])) {
+        println(s"Writing knowledge about ${k._1}")
         bw.write(k._1._1)
         bw.write(" ")
         bw.write(k._1._2)
@@ -135,6 +141,8 @@ abstract class GlobalStrategy {
             bw.write(",")
             bw.write(t._2.toString)
         }
+
+        bw.write("\n")
     }
 
     /**
@@ -142,19 +150,23 @@ abstract class GlobalStrategy {
      * @param data Data with only datapoint from this environment
      */
     protected def update_env(env: (String, String), data: Map[(Job, String), Map[String, Any]]): Unit = {
+        println(s"Updating $env knowledge with ${data.size} samples")
         // Regroup per chunk
-        val d_per_chunk: Map[Int, List[Map[String, Any]]] = data.values.groupBy(getChunk).mapValues(_.toList)
+        val d_per_chunk: Map[Int, List[Map[String, Any]]] =
+            data.values.groupBy(getChunk).mapValues(_.toList)
 
         // (avg, size) per chunk
-        val avg_size_per_chunk: Map[Int, (Double, Int)] = d_per_chunk.mapValues(m => (avg(m.map(_("execTime").asInstanceOf[Long])), m.size))
+        val avg_size_per_chunk: Map[Int, (Double, Int)] =
+            d_per_chunk.mapValues(m => (avg(m.map(_("execTime").asInstanceOf[Long])), m.size))
+        println(s"$env : (avg, size)")
+        avg_size_per_chunk.foreach(println)
 
         // (ratio, size) between chunk
-        val ratio_size_per_chunk: Map[Int, (Double, Int)] = avg_size_per_chunk.map(t => (t._1, compute_ratio(t._2, avg_size_per_chunk(t._1 + 1))))
+        val ratio_size_per_chunk: Map[Int, (Double, Int)] =
+            avg_size_per_chunk.map(t => (t._1, compute_ratio(t._2, avg_size_per_chunk.getOrElse(t._1 + 1, null))))
 
         // Update
-        for (i <- 0 to 83) {
-            knowledge(env)(i) = mergeRatio(knowledge(env)(i), ratio_size_per_chunk(i))
-        }
+        ratio_size_per_chunk.foreach(t => knowledge(env)(t._1) = mergeRatio(knowledge(env)(t._1), t._2))
     }
 
     /**
@@ -165,7 +177,11 @@ abstract class GlobalStrategy {
      * @return (ai+1/ai, min(ni, ni+1))
      */
     protected def compute_ratio(chunkI: (Double, Int), chunkIp1: (Double, Int)): (Double, Int) = {
-        (chunkIp1._1 / chunkI._1, Math.min(chunkI._2, chunkIp1._2))
+        if (chunkIp1 != null) {
+            (chunkIp1._1 / chunkI._1, Math.min(chunkI._2, chunkIp1._2))
+        }
+
+        (-1.0, 0)
     }
 
     /**

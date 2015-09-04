@@ -1,17 +1,20 @@
 package environment_listener
 
+import hybrid.HybridEnvironment
+import org.openmole.core.workflow.mole.MoleExecution
+import org.openmole.core.workflow.mole.MoleExecution.JobCreated
+
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.batch.environment.BatchEnvironment
 import org.openmole.core.workflow.job.Job
-
 import org.openmole.core.workflow.puzzle.Puzzle
 
 import scala.concurrent.stm._
 
 object Listener extends Logger with ListenerWriter {
-    private val env_list = mutable.MutableList[Environment]()
+    val env_list = mutable.MutableList[Environment]()
 
     private type t_callback = (Map[(Job, String), Map[String, Any]] => Unit)
     private val completedJob = mutable.MutableList[(Job, Environment)]()
@@ -20,6 +23,10 @@ object Listener extends Logger with ListenerWriter {
     /* Are initialized by registerCallback*/
     private var callThreshold: Long = -1
     private var callback: t_callback = null
+    var hyb: HybridEnvironment = null
+
+    /* Changed by listenPuzzle */
+    private var me: MoleExecution = null
 
     /**
      * Register a new environment that will be listened to
@@ -32,8 +39,24 @@ object Listener extends Logger with ListenerWriter {
 
     def listenPuzzle(p: Puzzle) {
         println("Listening to puzzle")
-        p.toExecution.start
+
+        me = p.toExecution
+        me.start
         println("Puzzle started")
+
+        new MoleListener(me).run()
+
+        me.waitUntilEnded
+        println("Puzzle ended")
+    }
+
+    /**
+     * Remove every data from the data_store
+     *
+     */
+    def flush_data_store() = atomic { implicit ctx =>
+        data_store.keys.foreach(data_store.remove)
+        println(s"Data store flushed: ${data_store.size}")
     }
 
     /**
@@ -65,8 +88,7 @@ object Listener extends Logger with ListenerWriter {
      */
     def createJobMap(job: Job, env: Environment) = atomic { implicit ctx =>
         if (data_store contains (job, env.toString())) {
-            //            Log.logger.severe(s"$job_id already created")
-            println(s"$job in $env already created")
+            //            println(s"$job in $env already created")
         } else {
             data_store((job, env.toString())) = TMap[String, Any]()
         }
@@ -137,7 +159,7 @@ object Listener extends Logger with ListenerWriter {
      * Will export the data of the completed jobs (contained in the completedJob list
      * @return The new data structure with the data
      */
-    private def exportCompletedJobs(): Map[(Job, String), Map[String, Any]] = atomic { implicit ctx =>
+    def exportCompletedJobs(): Map[(Job, String), Map[String, Any]] = atomic { implicit ctx =>
         val tmp = data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
         tmp
     }

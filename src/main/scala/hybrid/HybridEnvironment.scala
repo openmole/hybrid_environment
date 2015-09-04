@@ -57,12 +57,18 @@ class HybridEnvironment(
     private val es = environmentsList.size
     private val reg = batchJobWatcher.registry
 
+    globalStrategy.load("/tmp/global.openmole")
+    environmentsList.foreach(globalStrategy.add_environment)
+    println("Print init knowledge:")
+    globalStrategy.knowledge.foreach(println)
+
     /**
      * Register each environment to the Listener, and start the monitoring
      * Also register the callback function. Comment to deactivate
      */
     environmentsList.foreach(Listener.registerEnvironment)
     Listener.registerCallback(callback, sizeFeedback)
+    Listener.hyb = this
     Listener.startMonitoring()
 
     /**
