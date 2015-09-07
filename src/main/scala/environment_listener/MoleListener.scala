@@ -1,13 +1,15 @@
 package environment_listener
 
+import scala.collection.mutable
+
 import org.openmole.core.batch.environment.SimpleBatchEnvironment
 import org.openmole.core.workflow.mole.{ Capsule, MoleExecution }
 import org.openmole.core.workflow.mole.MoleExecution.JobCreated
 import org.openmole.core.event._
 
-import scala.collection.mutable
+import hybrid.HybridEnvironment
 
-class MoleListener(me: MoleExecution) extends Runnable {
+class MoleListener(me: MoleExecution, hyb: HybridEnvironment) extends Runnable {
 
     private val capsule_list = mutable.MutableList[Capsule]()
 
@@ -17,7 +19,7 @@ class MoleListener(me: MoleExecution) extends Runnable {
                 this.synchronized {
                     if (!capsule_list.contains(capsule)) {
                         capsule_list += capsule
-                        Listener.hyb.globalStrategy.save(Listener.exportCompletedJobs(),
+                        hyb.globalStrategy.save(Listener.exportCompletedJobs(),
                             Listener.env_list.toList.map(_.asInstanceOf[SimpleBatchEnvironment]))
                         Listener.flush_data_store()
                     }

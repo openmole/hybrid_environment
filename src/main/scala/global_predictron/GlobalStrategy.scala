@@ -178,7 +178,7 @@ abstract class GlobalStrategy {
      */
     protected def compute_ratio(chunkI: (Double, Int), chunkIp1: (Double, Int)): (Double, Int) = {
         if (chunkIp1 != null) {
-            (chunkIp1._1 / chunkI._1, Math.min(chunkI._2, chunkIp1._2))
+            return (chunkIp1._1 / chunkI._1, Math.min(chunkI._2, chunkIp1._2))
         }
 
         (-1.0, 0)

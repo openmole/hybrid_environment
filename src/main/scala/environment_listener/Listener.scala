@@ -1,15 +1,12 @@
 package environment_listener
 
 import hybrid.HybridEnvironment
-import org.openmole.core.workflow.mole.MoleExecution
-import org.openmole.core.workflow.mole.MoleExecution.JobCreated
 
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
 import org.openmole.core.batch.environment.BatchEnvironment
 import org.openmole.core.workflow.job.Job
-import org.openmole.core.workflow.puzzle.Puzzle
 
 import scala.concurrent.stm._
 
@@ -23,10 +20,6 @@ object Listener extends Logger with ListenerWriter {
     /* Are initialized by registerCallback*/
     private var callThreshold: Long = -1
     private var callback: t_callback = null
-    var hyb: HybridEnvironment = null
-
-    /* Changed by listenPuzzle */
-    private var me: MoleExecution = null
 
     /**
      * Register a new environment that will be listened to
@@ -35,19 +28,6 @@ object Listener extends Logger with ListenerWriter {
      */
     def registerEnvironment(env: Environment) {
         env_list += env
-    }
-
-    def listenPuzzle(p: Puzzle) {
-        println("Listening to puzzle")
-
-        me = p.toExecution
-        me.start
-        println("Puzzle started")
-
-        new MoleListener(me).run()
-
-        me.waitUntilEnded
-        println("Puzzle ended")
     }
 
     /**
@@ -123,11 +103,7 @@ object Listener extends Logger with ListenerWriter {
      */
     def completeJob(job: Job, env: Environment) = atomic { implicit ctx =>
         if (callback != null) {
-            if (!data_store.keySet.map(_._1).contains(job)) {
-                println("Wut: $job not in data store")
-            }
-
-            // FIX :  not efficient
+            //            if(!data_store((job, env.toString()))(ctx)("completed").asInstanceOf[Boolean]){
             if (!completedJob.map(_._1).contains(job)) {
                 this.synchronized {
                     completedJob += ((job, env))

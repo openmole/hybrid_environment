@@ -17,6 +17,8 @@
 
 package hybrid
 
+import org.openmole.core.workflow.puzzle.Puzzle
+
 import scala.util.Random
 
 import org.openmole.core.batch.environment.{ BatchExecutionJob, SimpleBatchEnvironment }
@@ -28,7 +30,7 @@ import org.openmole.core.workflow.job.Job
 import org.openmole.core.workspace.AuthenticationProvider
 import org.openmole.core.event.EventDispatcher
 
-import environment_listener.Listener
+import environment_listener.{ MoleListener, Listener }
 import local_predictron.LocalStrategy
 import global_predictron.GlobalStrategy
 
@@ -68,8 +70,24 @@ class HybridEnvironment(
      */
     environmentsList.foreach(Listener.registerEnvironment)
     Listener.registerCallback(callback, sizeFeedback)
-    Listener.hyb = this
     Listener.startMonitoring()
+
+    /**
+     * Run and listen the given puzzle
+     * @param p The puzzle to listen to.
+     */
+    def runAndListen(p: Puzzle) {
+        println("Listening to puzzle")
+
+        val me = p.toExecution
+        me.start
+        println("Puzzle started")
+
+        new MoleListener(me, this).run()
+
+        me.waitUntilEnded
+        println("Puzzle ended")
+    }
 
     /**
      * Submit the job to a random environment, with a uniform distribution
