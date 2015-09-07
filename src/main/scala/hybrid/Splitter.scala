@@ -27,7 +27,7 @@ object Splitter {
 
         val mapchunks = data.values.groupBy(getChunk)
         mapchunks.foreach(x => println(s"${x._1} ${x._2.size}"))
-        println("Sorted chunks")
+        println(s"Sorted chunks: ${mapchunks.size} different chunks")
         mapchunks.keys.toList.sortBy(cmpChunk).foreach(println)
         mapchunks.keys.toList.sortBy(cmpChunk).map(mapchunks(_).toList)
     }

@@ -17,7 +17,7 @@ object Listener extends Logger with ListenerWriter {
     val env_list = mutable.MutableList[Environment]()
 
     private type t_callback = (Map[(Job, String), Map[String, Any]] => Unit)
-    private val completedJob = mutable.MutableList[(Job, Environment)]()
+    private var completedJob = mutable.MutableList[(Job, Environment)]()
     private val cJobPerEnv = TMap[Environment, Long]()
 
     /* Are initialized by registerCallback*/
@@ -56,6 +56,7 @@ object Listener extends Logger with ListenerWriter {
      */
     def flush_data_store() = atomic { implicit ctx =>
         data_store.keys.foreach(data_store.remove)
+        completedJob = mutable.MutableList[(Job, Environment)]()
         println(s"Data store flushed: ${data_store.size}")
     }
 
@@ -141,6 +142,7 @@ object Listener extends Logger with ListenerWriter {
                     }
 
                     callback(exportCompletedJobs())
+                    println("...")
                 }
             }
         }
@@ -160,7 +162,7 @@ object Listener extends Logger with ListenerWriter {
      * @return The new data structure with the data
      */
     def exportCompletedJobs(): Map[(Job, String), Map[String, Any]] = atomic { implicit ctx =>
-        val tmp = data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.contains(j._1))
+        val tmp = data_store.mapValues(m => m.toMap).toMap.filter(j => completedJob.map(_._1).contains(j._1._1))
         tmp
     }
 }

@@ -111,9 +111,11 @@ class HybridEnvironment(
      * @param data Data of the completed jobs
      */
     def callback(data: Map[(Job, String), Map[String, Any]]) = {
-        println("Called back")
+        println(s"Called back with ${data.size} datapoints")
 
+        println("Will split")
         val splitted: List[List[Map[String, Any]]] = Splitter.split(data)
+        println("Splitted")
 
         val (current_pred, cw, previous_pred, pw): (t_pred, Int, t_pred, Int) =
             localStrategy.predict(splitted, environmentsList.toList)
