@@ -120,17 +120,19 @@ class HybridEnvironment(
         jobManager ! Manage(bej)
     }
 
-    /** Needed by the SimpleBatchEnvironment but should never be called:
-      * methods from the actual environments will be called instead.
-      */
+    /**
+     * Needed by the SimpleBatchEnvironment but should never be called:
+     * methods from the actual environments will be called instead.
+     */
     override def storage: SS = {
         println("Shouldn't be reached: Hybrid storage")
         environmentsList.head.storage.asInstanceOf[SS]
     }
 
-    /** Needed by the SimpleBatchEnvironment but should never be called:
-      * methods from the actual environments will be called instead.
-      */
+    /**
+     * Needed by the SimpleBatchEnvironment but should never be called:
+     * methods from the actual environments will be called instead.
+     */
     override def jobService: JS = {
         println("Shouldn't be reached: Hybrid job service")
         environmentsList.head.jobService.asInstanceOf[JS]

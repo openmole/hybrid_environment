@@ -15,6 +15,8 @@ object Listener extends Logger with ListenerWriter {
     val env_list = mutable.MutableList[Environment]()
 
     private type t_callback = (Map[(Job, String), Map[String, Any]] => Unit)
+
+    /** Associates completed job with environment on which it actually completed first */
     private var completedJob = mutable.MutableList[(Job, Environment)]()
     private val cJobPerEnv = TMap[Environment, Long]()
 
@@ -127,10 +129,13 @@ object Listener extends Logger with ListenerWriter {
      */
     def completeJob(job: Job, env: Environment) = atomic { implicit ctx =>
         if (callback != null) {
+
+            // TODO refactor some parts redundant with new design (eg: completed jobs)
             this.synchronized {
                 completedJob += ((job, env))
             }
 
+            // allows verifying that at least each environment has a finished job before calling feedback loop
             cJobPerEnv(env) = cJobPerEnv(env) + 1
 
             if ((completedJob.size % callThreshold) == 0 && cJobPerEnv.forall(_._2 > 0)) {

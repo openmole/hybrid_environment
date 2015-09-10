@@ -36,15 +36,16 @@ object EnvListener {
 
 class EnvListener(env: Environment) extends Runnable {
 
-    /** Used to time each job
-      * Map [
-      *  key -> Job
-      *   value -> Map [
-      *     key -> new job state name
-      *     value -> timestamp when received
-      *   ]
-      * ]
-      */
+    /**
+     * Used to time each job
+     * Map [
+     *  key -> Job
+     *   value -> Map [
+     *     key -> new job state name
+     *     value -> timestamp when received
+     *   ]
+     * ]
+     */
     private val jobTimings = mutable.HashMap[Job, mutable.HashMap[String, Long]]()
 
     /** Get Job from Execution Job */
@@ -125,23 +126,20 @@ class EnvListener(env: Environment) extends Runnable {
         env listen {
             case (_, JobStateChanged(job, SUBMITTED, READY)) =>
                 create(job)
-                fillInputs(job)
-                Listener.put(jobJob(job), env, "completed", false)
+                setDefaults(job)
                 processNewState(job, SUBMITTED, READY)
             case (_, JobStateChanged(job, KILLED, DONE)) =>
-                println(s"KILLED from DONE")
+                L.fine(s"KILLED from DONE")
                 putTimings(job, DONE)
-                Listener.put(jobJob(job), env, "failed", false)
                 Listener.put(jobJob(job), env, "completed", true)
-                //                Listener.printJob((jobJob(job), env))
                 Listener.jobCSV(jobJob(job), env)
                 Listener.completeJob(jobJob(job), env)
+                // remove job from Listener
                 delete(job)
             case (_, JobStateChanged(job, KILLED, oldState)) =>
-                println(s"KILLED from $oldState, incomplete job")
+                L.fine(s"KILLED from $oldState, incomplete job")
                 processNewState(job, KILLED, oldState)
                 putTimings(job, KILLED)
-                Listener.put(jobJob(job), env, "failed", false)
                 Listener.jobCSV(jobJob(job), env)
                 delete(job)
             case (_, JobStateChanged(job, FAILED, os)) =>
@@ -186,7 +184,7 @@ class EnvListener(env: Environment) extends Runnable {
      * And all the values defined in EnvListener.date_list
      * @param job The job
      */
-    private def fillInputs(job: ExecutionJob) = {
+    private def setDefaults(job: ExecutionJob) = {
         val id = jobJob(job)
 
         Listener.put(id, env, "env_name", env_name)
@@ -204,6 +202,9 @@ class EnvListener(env: Environment) extends Runnable {
         for ((dateFormat, name) <- EnvListener.date_list) {
             Listener.put(id, env, name, dateFormat.format(t))
         }
+
+        Listener.put(jobJob(job), env, "failed", false)
+        Listener.put(jobJob(job), env, "completed", false)
     }
 
     /**
@@ -225,15 +226,13 @@ class EnvListener(env: Environment) extends Runnable {
      * @param newState The new state
      */
     private def processNewState(job: ExecutionJob, newState: ExecutionState, oldState: ExecutionState) = {
-        //        L.info(s"$job\n\t$oldState -> $newState")
-
         jobTimings(jobJob(job))(newState.toString()) = Calendar.getInstance.getTimeInMillis / 1000
     }
 
     /**
      * Differentiate the timings between the two states, and put them in the data store.
      * t(laterState) - t(earlyState)
-     * If at least one state is not found, will put 0 as value.
+     * If at least one state is not found, will put -1 as value.
      * @param job The job concerned by the timing.
      * @param name The name of the timing.
      * @param laterState The most recent state.
@@ -253,7 +252,7 @@ class EnvListener(env: Environment) extends Runnable {
     /**
      * Should be called once the current state is KILLED.
      * It will compute all the defined timings using the saved times in jobTimings
-     * At the moment, compute :
+     * At the moment, compute:
      *  totalTime = stateFrom - submitted
      *  execTime = stateFrom - running
      *  waitingTime = running - submitted

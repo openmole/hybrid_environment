@@ -1,14 +1,6 @@
 package environment_listener
 
-import java.io.File
-
-import environment_listener.Listener._
-import org.openmole.core.workflow.execution.Environment
-import org.openmole.core.workflow.job.Job
-import org.openmole.tool.file._
-
-import scala.concurrent.stm._
-
+/** Gathers all I/O operations for the Listenner */
 trait ListenerWriter {
     protected val data_store = TMap[(Job, String), TMap[String, Any]]()
     /* By being public, allow user to select which variables he wants in the csv
@@ -19,19 +11,10 @@ trait ListenerWriter {
         "id", "senv")
     var csv_path: String = "/tmp/openmole.csv"
 
-    /**
-     * Will print all the data contained in the data_store
-     * Should be replaced by a function writing everything in a file
-     */
-    def printData() = atomic { implicit ctx =>
-        // FIXME Find a way in the openmole script to call this function at the end
-        Log.logger.info("Printing data...")
-
-        data_store.keys.foreach(printJob)
-    }
 
     /**
      * Print all the informations stored about the job_id.
+     * Used for debug purpose
      * @param je The job to display
      */
     def printJob(je: (Job, String)) = atomic { implicit ctx =>
@@ -44,11 +27,14 @@ trait ListenerWriter {
     /**
      * Dump the data store in the given csv file.
      * File will be created if does not exist, otherwise will append to it.
+     * Unused at the moment (csv is written per job).
      * @param path The path to the csv file
      * @return
+     * @deprecated
      */
+    @deprecated
     def dumpToCSV(path: String) = atomic { implicit ctx =>
-        Log.logger.info(s"Dumping data store to $csv_path")
+        Log.logger.fine(s"Dumping data store to $csv_path")
         val file: File = new File(csv_path)
 
         this.synchronized {
@@ -67,7 +53,8 @@ trait ListenerWriter {
      * @param job The job to be written.
      */
     def jobCSV(job: Job, env: Environment) {
-        //        Log.logger.info(s"Writing job $job measurements to $csv_path.")
+        Log.logger.fine(s"Writing job $job measurements to $csv_path.")
+
         val file: File = new File(csv_path)
 
         this.synchronized {
@@ -101,7 +88,7 @@ trait ListenerWriter {
      * @param file The file to be created
      */
     private def createCSV(file: File) {
-        Log.logger.info(s"Creating the file $file.")
+        Log.logger.fine(s"Creating the file $file.")
         file.getParentFile.mkdirs
         file.createNewFile
 
@@ -113,7 +100,7 @@ trait ListenerWriter {
      * @param file The file where the header should be put
      */
     private def writeHeader(file: File) {
-        println("Writing header")
+        Log.logger.fine("Writing CSV header")
 
         file.withWriter(true) { writer =>
             for (metric: String <- metrics) {
