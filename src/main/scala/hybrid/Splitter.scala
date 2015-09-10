@@ -3,12 +3,19 @@ package hybrid
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
-import org.openmole.core.workflow.execution.Environment
-import org.openmole.core.workflow.job.Job
+case class JobOnEnv(j: Job, env: String)
 
 object Splitter {
+
+    /** Gathers all the data regarding a job
+      * [ key -> metric name
+      *   value -> metric value
+      *   */
+//    type DataPoint = Map[String, Any]
+//    type Chunk = List[DataPoint]
+
     /**
-     * Current chunk according to tim. Chunk goes from 0 to 83. (2h)
+     * Current chunk according to tim. Chunk goes from 0 to 83. (2h over a week)
      */
     var current_chunk: Int = 0
 
@@ -21,14 +28,24 @@ object Splitter {
      * @param data The data to be splitted
      * @return (data chunk0, data chunk-1, data chunk-2, ...)
      */
+    // FIXME refactor with JobOnEnv and proper types
     def split(data: Map[(Job, String), Map[String, Any]]): List[List[Map[String, Any]]] = {
+
         updateCurrentChunk()
         println(s"Current Chunk: $current_chunk")
 
+        /** Map [
+          * key -> chunk id
+          * value -> DataPoint
+          */
         val mapchunks = data.values.groupBy(getChunk)
+
+        // TODO: debug -> remove
         mapchunks.foreach(x => println(s"${x._1} ${x._2.size}"))
         println(s"Sorted chunks: ${mapchunks.size} different chunks")
         mapchunks.keys.toList.sortBy(cmpChunk).foreach(println)
+
+        // returns list of chunks sorted from most recent to oldest
         mapchunks.keys.toList.sortBy(cmpChunk).map(mapchunks(_).toList)
     }
 
@@ -38,6 +55,7 @@ object Splitter {
      * Ask the calendar what time it is, then update the current chunk
      */
     private def updateCurrentChunk() = {
+        
         val t = Calendar.getInstance().getTime
         /* day of the week goes from 1 to 7 */
         val dw = new SimpleDateFormat("F").format(t).toInt
