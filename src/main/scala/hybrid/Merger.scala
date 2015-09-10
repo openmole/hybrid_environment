@@ -20,9 +20,11 @@ object Merger {
         current_pred: List[(SimpleBatchEnvironment, Double)],
         current_weight: Int): List[(SimpleBatchEnvironment, Double)] = {
 
-        val mg = current_pred.groupBy(_._1).mapValues(_.head._2)
+        // FIXME refactor head -> flatten
+        val envsToPredictions = current_pred.groupBy(_._1).mapValues(_.head._2)
 
         val s = previous_weight + current_weight
-        previous_pred.map(d => (d._1, (d._2 * previous_weight + mg(d._1) * current_weight) / s))
+        // merge previous and current predictions, by taking care of giving more weight to predictions with more datapoints
+        previous_pred.map(d => (d._1, (d._2 * previous_weight + envsToPredictions(d._1) * current_weight) / s))
     }
 }

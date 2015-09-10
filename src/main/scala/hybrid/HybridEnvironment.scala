@@ -172,14 +172,16 @@ class HybridEnvironment(
     }
 
     /**
-     * Calculate, witht the predictions, the optimal number of jobs for each environment
+     * Calculate, with the predictions, the optimal number of jobs for each environment
      * @param env_pred The time prediction
      * @return Tuples of Environments and number of jobs they should have
      */
     private def compute_repartition(env_pred: List[(SimpleBatchEnvironment, Double)]): List[(SimpleBatchEnvironment, Int)] = {
         val s: Double = env_pred.map(_._2).sum
         val n = reg.allJobs.count(!_.finished)
-        env_pred.map(x => (x._1, (n * (1 - x._2 / s)).toInt)).sortBy(_._2)
+
+        // how many jobs should each environment have considering the prediction and amount of jobs still running
+        env_pred.map(x => (x._1, (n * (1 - x._2 / s)).toInt))
     }
 
     /**
@@ -190,7 +192,13 @@ class HybridEnvironment(
     private def enforce_repartition(env_n: List[(SimpleBatchEnvironment, Int)]) = {
         // TODO : Refactor, this thing is definitely too huge.
 
+        /** Gather exceeding jobs before giving them back to environments */
         var jobPool = List[BatchExecutionJob]()
+
+          // FIXME sort by descending order of exceeding jobs
+          // TODO map difference over collecion to sort correctly
+//          .sortBy(_._2)
+
         for ((env, n) <- env_n) {
             val current_n = reg.allExecutionJobs.filter(!_.job.finished).count(_.environment == env)
             val d: Int = current_n - n

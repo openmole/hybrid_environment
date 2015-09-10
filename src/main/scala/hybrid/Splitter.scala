@@ -55,7 +55,7 @@ object Splitter {
      * Ask the calendar what time it is, then update the current chunk
      */
     private def updateCurrentChunk() = {
-        
+
         val t = Calendar.getInstance().getTime
         /* day of the week goes from 1 to 7 */
         val dw = new SimpleDateFormat("F").format(t).toInt

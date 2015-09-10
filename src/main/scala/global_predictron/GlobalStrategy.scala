@@ -17,11 +17,20 @@ import hybrid.Splitter.getChunk
 import GlobalStrategy._
 
 object GlobalStrategy {
+
+    /**
+     * @param e_type Type of environment
+     * @param e_address Host machine / address
+     */
     case class Env_key(e_type: String, e_address: String) {
         override def toString: String = {
             e_type ++ " " ++ e_address
         }
     }
+    /**
+     * @param ratio between current and next chunks
+     * @param weight number of jobs (to even ratio)
+     * */
     case class ChunkValue(ratio: Double, weight: Int) {
         override def toString: String = {
             ratio.toString ++ "," ++ weight.toString
@@ -31,6 +40,11 @@ object GlobalStrategy {
 
 abstract class GlobalStrategy {
     protected var path: String = null
+
+    /** Map [
+      *  key -> environment
+      *  value -> list of values for each chunks for this environment
+      */
     val knowledge = new mutable.HashMap[Env_key, Array[ChunkValue]]()
 
     /**
@@ -44,7 +58,7 @@ abstract class GlobalStrategy {
 
     /**
      * Load the data about environments.
-     * @param p file
+     * @param p path to file where to find knowledge
      */
     def load(p: String) = {
         path = p
@@ -169,11 +183,11 @@ abstract class GlobalStrategy {
         println(s"$env : (avg, size)")
         avg_size_per_chunk.foreach(println)
 
-        // (ratio, size) between chunk
+        // (ratio, size) between chunks
         val ratio_size_per_chunk: Map[Int, ChunkValue] =
             avg_size_per_chunk.map(t => (t._1, compute_ratio(t._2, avg_size_per_chunk.getOrElse(t._1 + 1, null))))
 
-        // Update
+        // Update + merge
         ratio_size_per_chunk.foreach(t => knowledge(env)(t._1) = mergeRatio(knowledge(env)(t._1), t._2))
     }
 
@@ -185,6 +199,7 @@ abstract class GlobalStrategy {
      * @return (ai+1/ai, min(ni, ni+1))
      */
     protected def compute_ratio(chunkI: (Double, Int), chunkIp1: (Double, Int)): ChunkValue = {
+        // FIXME refactor to Option
         if (chunkIp1 != null) {
             return ChunkValue(chunkIp1._1 / chunkI._1, Math.min(chunkI._2, chunkIp1._2))
         }

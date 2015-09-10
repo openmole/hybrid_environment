@@ -1,10 +1,7 @@
 package local_predictron
 
-import org.openmole.core.batch.environment.SimpleBatchEnvironment
-import org.openmole.core.workflow.execution.Environment
-import org.openmole.core.workflow.job.Job
-
 import hybrid.HybridEnvironment.t_pred
+import org.openmole.core.batch.environment.SimpleBatchEnvironment
 
 abstract class LocalStrategy {
     /**
@@ -36,7 +33,10 @@ abstract class LocalStrategy {
      * Take data from one chunk and predict on it
      * @param data The data
      * @param env_l Env list
-     * @return Prediction for this chunk only. Used at leasst for current_pred
+     * @return Pair of (
+     *             Prediction for this chunk only. Used at least for current_pred
+     *             Weight of the prediction
+     *         )
      */
     protected def subpredict(data: List[Map[String, Any]], env_l: List[SimpleBatchEnvironment]): (t_pred, Int)
 }
