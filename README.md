@@ -1,4 +1,4 @@
-# environment_listener
+# HybridEnvironment
 External openmole plugin, listening to the givens environments, and saving data and statistics about them.
 
 
