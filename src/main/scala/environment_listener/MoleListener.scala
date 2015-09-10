@@ -18,6 +18,7 @@ class MoleListener(me: MoleExecution, hyb: HybridEnvironment) extends Runnable {
             case (_, JobCreated(_, capsule)) =>
                 this.synchronized {
                     if (!capsule_list.contains(capsule)) {
+                        println("Found new capsule")
                         capsule_list += capsule
                         hyb.globalStrategy.save(Listener.exportCompletedJobs(),
                             Listener.env_list.toList.map(_.asInstanceOf[SimpleBatchEnvironment]))

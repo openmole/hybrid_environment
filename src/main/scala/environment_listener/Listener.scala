@@ -1,11 +1,12 @@
 package environment_listener
 
 import hybrid.HybridEnvironment
+import org.openmole.core.workflow.puzzle.Puzzle
 
 import scala.collection.mutable
 import org.openmole.tool.logger.Logger
 import org.openmole.core.workflow.execution.Environment
-import org.openmole.core.batch.environment.BatchEnvironment
+import org.openmole.core.batch.environment.{ SimpleBatchEnvironment, BatchEnvironment }
 import org.openmole.core.workflow.job.Job
 
 import scala.concurrent.stm._
@@ -20,6 +21,28 @@ object Listener extends Logger with ListenerWriter {
     /* Are initialized by registerCallback*/
     private var callThreshold: Long = -1
     private var callback: t_callback = null
+
+    var hyb: HybridEnvironment = null
+
+    /**
+     * Run and listen the given puzzle
+     * @param p The puzzle to listen to.
+     */
+    def listenPuzzle(p: Puzzle) {
+        println("Listening to puzzle")
+
+        val me = p.toExecution
+        me.start
+        println("Puzzle started")
+
+        new MoleListener(me, hyb).run()
+
+        me.waitUntilEnded
+
+        hyb.globalStrategy.save(Listener.exportCompletedJobs(),
+            Listener.env_list.toList.map(_.asInstanceOf[SimpleBatchEnvironment]))
+        println("Puzzle ended")
+    }
 
     /**
      * Register a new environment that will be listened to
@@ -103,23 +126,20 @@ object Listener extends Logger with ListenerWriter {
      */
     def completeJob(job: Job, env: Environment) = atomic { implicit ctx =>
         if (callback != null) {
-            //            if(!data_store((job, env.toString()))(ctx)("completed").asInstanceOf[Boolean]){
-            if (!completedJob.map(_._1).contains(job)) {
-                this.synchronized {
-                    completedJob += ((job, env))
+            this.synchronized {
+                completedJob += ((job, env))
+            }
+
+            cJobPerEnv(env) = cJobPerEnv(env) + 1
+
+            if ((completedJob.size % callThreshold) == 0 && cJobPerEnv.forall(_._2 > 0)) {
+                println("Will callback")
+                atomic { implicit ctx =>
+                    cJobPerEnv.foreach(println)
                 }
 
-                cJobPerEnv(env) = cJobPerEnv(env) + 1
-
-                if ((completedJob.size % callThreshold) == 0 && cJobPerEnv.forall(_._2 > 0)) {
-                    println("Will callback")
-                    atomic { implicit ctx =>
-                        cJobPerEnv.foreach(println)
-                    }
-
-                    callback(exportCompletedJobs())
-                    println("...")
-                }
+                callback(exportCompletedJobs())
+                println("...")
             }
         }
     }

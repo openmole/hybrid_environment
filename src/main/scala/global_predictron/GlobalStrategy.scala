@@ -14,9 +14,24 @@ import org.openmole.core.workflow.job.Job
 
 import hybrid.Splitter.getChunk
 
+import GlobalStrategy._
+
+object GlobalStrategy {
+    case class Env_key(e_type: String, e_address: String) {
+        override def toString: String = {
+            e_type ++ " " ++ e_address
+        }
+    }
+    case class ChunkValue(ratio: Double, weight: Int) {
+        override def toString: String = {
+            ratio.toString ++ "," ++ weight.toString
+        }
+    }
+}
+
 abstract class GlobalStrategy {
     protected var path: String = null
-    val knowledge = new mutable.HashMap[(String, String), Array[(Double, Int)]]()
+    val knowledge = new mutable.HashMap[Env_key, Array[ChunkValue]]()
 
     /**
      * Will predict the execution time of the job for each environment, using the predictions of the local strategy as well.
@@ -53,11 +68,11 @@ abstract class GlobalStrategy {
      */
     def add_environment(env: SimpleBatchEnvironment) {
         val key = envToKey(env)
-        add_environment(key._1, key._2)
+        add_environment(key.e_type, key.e_address)
     }
 
     protected def add_environment(kind: String, address: String): Unit = {
-        knowledge((kind, address)) = Array.fill(83) { (-1.0, 0) }
+        knowledge(Env_key(kind, address)) = Array.fill(83) { ChunkValue(-1.0, 0) }
     }
 
     /**
@@ -67,7 +82,8 @@ abstract class GlobalStrategy {
      * @param data The data of the environment
      */
     protected def load_environment(kind: String, address: String, data: Array[String]) {
-        knowledge((kind, address)) = data.map(_.split(",")).map(a => (a(0).toDouble, a(1).toInt))
+        knowledge(Env_key(kind, address)) = data.map(_.split(","))
+            .map(a => ChunkValue(a(0).toDouble, a(1).toInt))
     }
 
     /**
@@ -75,7 +91,7 @@ abstract class GlobalStrategy {
      * @param env The environment
      * @return (Kind, address)
      */
-    protected def envToKey(env: SimpleBatchEnvironment): (String, String) = {
+    protected def envToKey(env: SimpleBatchEnvironment): Env_key = {
         val env_kind: String = env match {
             case _: SSHEnvironment => "SSHEnvironment"
             case _: CondorEnvironment => "CondorEnvironment"
@@ -96,7 +112,7 @@ abstract class GlobalStrategy {
                 ""
         }
 
-        (env_kind, address)
+        Env_key(env_kind, address)
     }
 
     /**
@@ -129,19 +145,11 @@ abstract class GlobalStrategy {
      * @param bw The writer where to write
      * @param k The knowledge to write
      */
-    protected def writeKnowledge(bw: BufferedWriter, k: ((String, String), Array[(Double, Int)])) {
+    protected def writeKnowledge(bw: BufferedWriter, k: (Env_key, Array[ChunkValue])) {
         println(s"Writing knowledge about ${k._1}")
-        bw.write(k._1._1)
+        bw.write(k._1.toString)
         bw.write(" ")
-        bw.write(k._1._2)
-
-        for (t <- k._2) {
-            bw.write(" ")
-            bw.write(t._1.toString)
-            bw.write(",")
-            bw.write(t._2.toString)
-        }
-
+        k._2.mkString(" ")
         bw.write("\n")
     }
 
@@ -149,7 +157,7 @@ abstract class GlobalStrategy {
      * Update the knowledge of the environment
      * @param data Data with only datapoint from this environment
      */
-    protected def update_env(env: (String, String), data: Map[(Job, String), Map[String, Any]]): Unit = {
+    protected def update_env(env: Env_key, data: Map[(Job, String), Map[String, Any]]): Unit = {
         println(s"Updating $env knowledge with ${data.size} samples")
         // Regroup per chunk
         val d_per_chunk: Map[Int, List[Map[String, Any]]] =
@@ -162,7 +170,7 @@ abstract class GlobalStrategy {
         avg_size_per_chunk.foreach(println)
 
         // (ratio, size) between chunk
-        val ratio_size_per_chunk: Map[Int, (Double, Int)] =
+        val ratio_size_per_chunk: Map[Int, ChunkValue] =
             avg_size_per_chunk.map(t => (t._1, compute_ratio(t._2, avg_size_per_chunk.getOrElse(t._1 + 1, null))))
 
         // Update
@@ -176,12 +184,12 @@ abstract class GlobalStrategy {
      * @param chunkIp1 Chunk_{i+1}
      * @return (ai+1/ai, min(ni, ni+1))
      */
-    protected def compute_ratio(chunkI: (Double, Int), chunkIp1: (Double, Int)): (Double, Int) = {
+    protected def compute_ratio(chunkI: (Double, Int), chunkIp1: (Double, Int)): ChunkValue = {
         if (chunkIp1 != null) {
-            return (chunkIp1._1 / chunkI._1, Math.min(chunkI._2, chunkIp1._2))
+            return ChunkValue(chunkIp1._1 / chunkI._1, Math.min(chunkI._2, chunkIp1._2))
         }
 
-        (-1.0, 0)
+        ChunkValue(-1.0, 0)
     }
 
     /**
@@ -190,8 +198,9 @@ abstract class GlobalStrategy {
      * @param r2 Second tuple
      * @return New tuple
      */
-    protected def mergeRatio(r1: (Double, Int), r2: (Double, Int)): (Double, Int) = {
-        ((r1._1 * r1._2 + r2._1 * r2._2) / (r1._2 + r2._2), r1._2 + r2._2)
+    protected def mergeRatio(r1: ChunkValue, r2: ChunkValue): ChunkValue = {
+        ChunkValue((r1.ratio * r1.weight + r2.ratio * r2.weight) / (r1.weight + r2.weight),
+            r1.weight + r2.weight)
     }
 
     /**

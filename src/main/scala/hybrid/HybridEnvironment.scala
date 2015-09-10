@@ -70,6 +70,7 @@ class HybridEnvironment(
      */
     environmentsList.foreach(Listener.registerEnvironment)
     Listener.registerCallback(callback, sizeFeedback)
+    Listener.hyb = this
     Listener.startMonitoring()
 
     /**
@@ -77,16 +78,23 @@ class HybridEnvironment(
      * @param p The puzzle to listen to.
      */
     def runAndListen(p: Puzzle) {
-        println("Listening to puzzle")
+        val herp = this
+        class runner extends Runnable {
+            def run() = {
+                println("Listening to puzzle")
 
-        val me = p.toExecution
-        me.start
-        println("Puzzle started")
+                val me = p.toExecution
+                me.start
+                println("Puzzle started")
 
-        new MoleListener(me, this).run()
+                new MoleListener(me, herp).run()
 
-        me.waitUntilEnded
-        println("Puzzle ended")
+                me.waitUntilEnded
+                println("Puzzle ended")
+            }
+        }
+
+        new runner().run()
     }
 
     /**
