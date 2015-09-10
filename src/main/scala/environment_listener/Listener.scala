@@ -80,6 +80,7 @@ object Listener extends Logger with ListenerWriter {
             new EnvListener(env).run()
             new BatchListener(env.asInstanceOf[BatchEnvironment]).run()
 
+            // will be used to count the number of finished jobs per environment
             atomic { implicit ctx =>
                 cJobPerEnv(env) = 0
             }

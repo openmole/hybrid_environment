@@ -22,6 +22,7 @@ object EnvListener {
     /**
      * Will contain the list of all the date measurements done at the submission of the job
      */
+    // FIXME refactor as non-mutable list
     private val date_list = mutable.MutableList[(SimpleDateFormat, String)]()
 
     date_list += ((new SimpleDateFormat("HH"), "hour"))
@@ -34,8 +35,20 @@ object EnvListener {
 }
 
 class EnvListener(env: Environment) extends Runnable {
+
+    /** Used to time each job
+      * Map [
+      *  key -> Job
+      *   value -> Map [
+      *     key -> new job state name
+      *     value -> timestamp when received
+      *   ]
+      * ]
+      */
     private val jobTimings = mutable.HashMap[Job, mutable.HashMap[String, Long]]()
 
+    /** Get Job from Execution Job */
+    // TODO refactor as macro "job.asInstanceOf[BatchExecutionJob].job"
     private val jobJob = mutable.HashMap[ExecutionJob, Job]()
     private val L = Listener.Log.logger
     private var n: Long = 0
@@ -125,7 +138,7 @@ class EnvListener(env: Environment) extends Runnable {
                 Listener.completeJob(jobJob(job), env)
                 delete(job)
             case (_, JobStateChanged(job, KILLED, oldState)) =>
-                println(s"KILLED from $oldState, uncomplete job")
+                println(s"KILLED from $oldState, incomplete job")
                 processNewState(job, KILLED, oldState)
                 putTimings(job, KILLED)
                 Listener.put(jobJob(job), env, "failed", false)
